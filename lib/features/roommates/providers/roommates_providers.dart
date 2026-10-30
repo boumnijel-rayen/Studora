@@ -3,24 +3,81 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/core.dart';
 import '../models/roommate_models.dart';
 
-/// Gestion des colocataires connectée à `/roommate-members`.
+/// Colocation de l'utilisateur connecté (`null` s'il n'en a pas encore), connectée à `/colocations`.
+class ColocationAsyncNotifier extends AsyncNotifier<Colocation?> {
+  @override
+  Future<Colocation?> build() async {
+    final user = ref.watch(currentUserProvider);
+    if (user == null) return null;
+    return _fetchColocation();
+  }
+
+  Future<Colocation?> _fetchColocation() async {
+    final client = ref.read(strapiClientProvider);
+    final response = await client.get('/colocations/mine');
+    final data = response is Map<String, dynamic> ? response['data'] : null;
+    return data is Map<String, dynamic> ? Colocation.fromJson(data) : null;
+  }
+
+  Future<void> refresh() async {
+    state = const AsyncLoading();
+    state = await AsyncValue.guard(_fetchColocation);
+  }
+
+  Future<Colocation> create({
+    required String name,
+    required String address,
+    String details = '',
+  }) async {
+    final client = ref.read(strapiClientProvider);
+    final response = await client.post(
+      '/colocations',
+      body: {'name': name, 'address': address, 'details': details},
+    );
+    final created = Colocation.fromJson(StrapiClient.unwrapMap(response));
+    state = AsyncData(created);
+    return created;
+  }
+
+  Future<Colocation> join({required String code}) async {
+    final client = ref.read(strapiClientProvider);
+    final response = await client.post(
+      '/colocations/join',
+      body: {'code': code.trim().toUpperCase()},
+    );
+    final joined = Colocation.fromJson(StrapiClient.unwrapMap(response));
+    state = AsyncData(joined);
+    return joined;
+  }
+
+  Future<void> leave() async {
+    final client = ref.read(strapiClientProvider);
+    await client.post('/colocations/leave', body: const {});
+    state = const AsyncData(null);
+  }
+}
+
+final colocationAsyncProvider =
+    AsyncNotifierProvider<ColocationAsyncNotifier, Colocation?>(
+      ColocationAsyncNotifier.new,
+    );
+
+final colocationProvider = Provider<Colocation?>((ref) {
+  return ref.watch(colocationAsyncProvider).value;
+});
+
+/// Membres de la colocation connectés à `/roommate-members`, anciens membres inclus.
 class RoommatesAsyncNotifier extends AsyncNotifier<List<Roommate>> {
   @override
   Future<List<Roommate>> build() async {
-    final user = ref.watch(currentUserProvider);
-    if (user == null) return const [];
+    final colocation = await ref.watch(colocationAsyncProvider.future);
+    if (colocation == null) return const [];
     return _fetchRoommates();
   }
 
   Future<List<Roommate>> _fetchRoommates() async {
     final client = ref.read(strapiClientProvider);
-    final items = await client.getList(
-      '/roommate-members',
-      queryParameters: {
-        'sort[0]': 'name:asc',
-        'pagination[pageSize]': '100',
-      },
-    );
+    final items = await client.getList('/roommate-members');
     return items.map(Roommate.fromJson).toList();
   }
 
@@ -36,6 +93,20 @@ class RoommatesAsyncNotifier extends AsyncNotifier<List<Roommate>> {
     final current = state.value ?? const <Roommate>[];
     state = AsyncData([...current, created]);
     return created;
+  }
+
+  Future<Roommate> edit(Roommate r) async {
+    final client = ref.read(strapiClientProvider);
+    final response = await client.put('/roommate-members/${r.id}', body: r.toJson());
+    final updated = Roommate.fromJson(StrapiClient.unwrapMap(response));
+    final current = state.value ?? const <Roommate>[];
+    state = AsyncData([
+      for (final m in current) m.id == updated.id ? updated : m,
+    ]);
+    // Les tâches et dépenses affichent le nom actuel du membre.
+    ref.invalidate(choresAsyncProvider);
+    ref.invalidate(expensesAsyncProvider);
+    return updated;
   }
 
   Future<void> togglePresence(String id) async {
@@ -58,11 +129,12 @@ class RoommatesAsyncNotifier extends AsyncNotifier<List<Roommate>> {
     }
   }
 
+  /// Retire le membre : sa fiche reste pour l'historique, ses tâches en attente sont réassignées.
   Future<void> delete(String id) async {
     final client = ref.read(strapiClientProvider);
     await client.delete('/roommate-members/$id');
-    final current = state.value ?? const <Roommate>[];
-    state = AsyncData(current.where((r) => r.id != id).toList());
+    state = await AsyncValue.guard(_fetchRoommates);
+    ref.invalidate(choresAsyncProvider);
   }
 }
 
@@ -71,28 +143,29 @@ final roommatesAsyncProvider =
       RoommatesAsyncNotifier.new,
     );
 
+/// Membres actuels de la colocation.
 final roommatesProvider = Provider<List<Roommate>>((ref) {
-  return ref.watch(roommatesAsyncProvider).value ?? const [];
+  final all = ref.watch(roommatesAsyncProvider).value ?? const <Roommate>[];
+  return all.where((r) => r.isActive).toList();
+});
+
+/// Fiche de l'utilisateur connecté dans sa colocation.
+final currentRoommateProvider = Provider<Roommate?>((ref) {
+  return ref.watch(roommatesProvider).where((r) => r.isMe).firstOrNull;
 });
 
 /// Gestion des tâches ménagères connectée à `/chores`.
 class ChoresAsyncNotifier extends AsyncNotifier<List<Chore>> {
   @override
   Future<List<Chore>> build() async {
-    final user = ref.watch(currentUserProvider);
-    if (user == null) return const [];
+    final colocation = await ref.watch(colocationAsyncProvider.future);
+    if (colocation == null) return const [];
     return _fetchChores();
   }
 
   Future<List<Chore>> _fetchChores() async {
     final client = ref.read(strapiClientProvider);
-    final items = await client.getList(
-      '/chores',
-      queryParameters: {
-        'sort[0]': 'dueDate:asc',
-        'pagination[pageSize]': '100',
-      },
-    );
+    final items = await client.getList('/chores');
     return items.map(Chore.fromJson).toList();
   }
 
@@ -128,6 +201,9 @@ class ChoresAsyncNotifier extends AsyncNotifier<List<Chore>> {
       state = AsyncData(current);
       rethrow;
     }
+
+    // Le serveur crée ou retire l'occurrence suivante des tâches récurrentes.
+    state = await AsyncValue.guard(_fetchChores);
   }
 
   Future<void> delete(String id) async {
@@ -151,20 +227,14 @@ final choresProvider = Provider<List<Chore>>((ref) {
 class ExpensesAsyncNotifier extends AsyncNotifier<List<Expense>> {
   @override
   Future<List<Expense>> build() async {
-    final user = ref.watch(currentUserProvider);
-    if (user == null) return const [];
+    final colocation = await ref.watch(colocationAsyncProvider.future);
+    if (colocation == null) return const [];
     return _fetchExpenses();
   }
 
   Future<List<Expense>> _fetchExpenses() async {
     final client = ref.read(strapiClientProvider);
-    final items = await client.getList(
-      '/expenses',
-      queryParameters: {
-        'sort[0]': 'date:desc',
-        'pagination[pageSize]': '100',
-      },
-    );
+    final items = await client.getList('/expenses');
     return items.map(Expense.fromJson).toList();
   }
 
@@ -188,8 +258,8 @@ class ExpensesAsyncNotifier extends AsyncNotifier<List<Expense>> {
     final response = await client.post(
       '/expenses/settle',
       body: {
-        'fromPerson': debt.fromPerson,
-        'toPerson': debt.toPerson,
+        'fromMemberId': debt.fromId,
+        'toMemberId': debt.toId,
         'amount': debt.amount,
       },
       wrapData: false,
@@ -222,122 +292,72 @@ final sharedExpensesProvider = Provider<List<Expense>>((ref) {
   return ref.watch(expensesProvider).where((e) => !e.isSettlement).toList();
 });
 
-/// Calcul réel des dettes simplifiées à partir des colocataires, dépenses partagées et remboursements.
+/// Total des dépenses communes du mois en cours.
+final monthlyExpensesTotalProvider = Provider<double>((ref) {
+  final now = DateTime.now();
+  return ref
+      .watch(sharedExpensesProvider)
+      .where((e) {
+        final date = e.date.toLocal();
+        return date.year == now.year && date.month == now.month;
+      })
+      .fold<double>(0, (total, e) => total + e.amount);
+});
+
+/// Part de l'utilisateur connecté dans l'ensemble des dépenses communes.
+final myExpensesShareProvider = Provider<double>((ref) {
+  final me = ref.watch(currentRoommateProvider);
+  if (me == null) return 0.0;
+  return ref
+      .watch(sharedExpensesProvider)
+      .where((e) => e.participantIds.contains(me.id))
+      .fold<double>(0, (total, e) => total + e.amount / e.participantIds.length);
+});
+
+/// Dettes simplifiées, calculées à partir de tous les membres, anciens compris.
 final balancesDueProvider = Provider<List<BalanceDue>>((ref) {
-  final roommates = ref.watch(roommatesProvider);
-  final expenses = ref.watch(expensesProvider);
-  if (expenses.isEmpty) return const [];
-
-  final participants = <String>{
-    for (final r in roommates)
-      if (r.name.trim().isNotEmpty) r.name.trim(),
-    for (final e in expenses)
-      if (e.paidByName.trim().isNotEmpty) e.paidByName.trim(),
-    for (final e in expenses)
-      if (e.reimbursedToName != null && e.reimbursedToName!.trim().isNotEmpty)
-        e.reimbursedToName!.trim(),
-  }.toList();
-
-  if (participants.length < 2) return const [];
-
-  // Solde net par participant : positif = on lui doit de l'argent, négatif = il doit de l'argent.
-  final net = <String, double>{for (final p in participants) p: 0.0};
-  final count = participants.length;
-
-  for (final e in expenses) {
-    final payer = e.paidByName.trim();
-    if (payer.isEmpty) continue;
-
-    if (e.isSettlement && e.reimbursedToName != null && e.reimbursedToName!.trim().isNotEmpty) {
-      final receiver = e.reimbursedToName!.trim();
-      net[payer] = (net[payer] ?? 0.0) + e.amount;
-      net[receiver] = (net[receiver] ?? 0.0) - e.amount;
-    } else {
-      final share = e.amount / count;
-      for (final p in participants) {
-        net[p] = (net[p] ?? 0.0) - share;
-      }
-      net[payer] = (net[payer] ?? 0.0) + e.amount;
-    }
-  }
-
-  final debtors = <MapEntry<String, double>>[];
-  final creditors = <MapEntry<String, double>>[];
-
-  for (final entry in net.entries) {
-    if (entry.value < -0.01) {
-      debtors.add(MapEntry(entry.key, -entry.value));
-    } else if (entry.value > 0.01) {
-      creditors.add(MapEntry(entry.key, entry.value));
-    }
-  }
-
-  debtors.sort((a, b) => b.value.compareTo(a.value));
-  creditors.sort((a, b) => b.value.compareTo(a.value));
-
-  final results = <BalanceDue>[];
-  var i = 0;
-  var j = 0;
-
-  while (i < debtors.length && j < creditors.length) {
-    final debtor = debtors[i];
-    final creditor = creditors[j];
-    final settled = debtor.value < creditor.value ? debtor.value : creditor.value;
-
-    if (settled > 0.01) {
-      results.add(
-        BalanceDue(
-          fromPerson: debtor.key,
-          toPerson: creditor.key,
-          amount: double.parse(settled.toStringAsFixed(2)),
-        ),
-      );
-    }
-
-    final remainingDebt = debtor.value - settled;
-    final remainingCredit = creditor.value - settled;
-
-    if (remainingDebt <= 0.01) {
-      i++;
-    } else {
-      debtors[i] = MapEntry(debtor.key, remainingDebt);
-    }
-
-    if (remainingCredit <= 0.01) {
-      j++;
-    } else {
-      creditors[j] = MapEntry(creditor.key, remainingCredit);
-    }
-  }
-
-  return results;
+  final members = ref.watch(roommatesAsyncProvider).value ?? const <Roommate>[];
+  return computeBalances(members, ref.watch(expensesProvider));
 });
 
 /// Solde net de l'utilisateur courant dans la colocation.
 final netUserBalanceProvider = Provider<double>((ref) {
-  final user = ref.watch(currentUserProvider);
-  final balances = ref.watch(balancesDueProvider);
-  if (balances.isEmpty) return 0.0;
-
-  final userName = user?.fullName.trim().toLowerCase() ?? '';
-  if (userName.isEmpty) {
-    return balances.fold<double>(0.0, (acc, b) => acc + b.amount);
-  }
+  final me = ref.watch(currentRoommateProvider);
+  if (me == null) return 0.0;
 
   var net = 0.0;
-  var matchedUser = false;
-  for (final b in balances) {
-    if (b.toPerson.trim().toLowerCase() == userName) {
+  for (final b in ref.watch(balancesDueProvider)) {
+    if (b.toId == me.id) {
       net += b.amount;
-      matchedUser = true;
-    } else if (b.fromPerson.trim().toLowerCase() == userName) {
+    } else if (b.fromId == me.id) {
       net -= b.amount;
-      matchedUser = true;
     }
-  }
-
-  if (!matchedUser) {
-    return balances.fold<double>(0.0, (acc, b) => acc + b.amount);
   }
   return net;
 });
+
+/// Messages de la colocation (`/colocation-messages`).
+final colocationMessagesProvider = FutureProvider<List<AppChatEntry>>((ref) async {
+  final colocation = await ref.watch(colocationAsyncProvider.future);
+  if (colocation == null) return const [];
+
+  final client = ref.read(strapiClientProvider);
+  final items = await client.getList('/colocation-messages');
+  return items.map(AppChatEntry.fromJson).toList();
+});
+
+/// Service d'envoi des messages de la colocation.
+class ColocationChatService {
+  ColocationChatService(this._ref);
+  final Ref _ref;
+
+  Future<void> sendMessage(String text) async {
+    final client = _ref.read(strapiClientProvider);
+    await client.post('/colocation-messages', body: {'text': text});
+    _ref.invalidate(colocationMessagesProvider);
+  }
+}
+
+final colocationChatServiceProvider = Provider<ColocationChatService>(
+  ColocationChatService.new,
+);

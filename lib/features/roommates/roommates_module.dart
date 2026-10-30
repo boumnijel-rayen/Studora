@@ -10,6 +10,7 @@ import 'screens/add_expense_screen.dart';
 import 'screens/add_roommate_screen.dart';
 import 'screens/balances_screen.dart';
 import 'screens/chores_screen.dart';
+import 'screens/colocation_chat_screen.dart';
 import 'screens/expenses_screen.dart';
 import 'screens/roommates_home_screen.dart';
 import 'screens/roommates_list_screen.dart';
@@ -48,7 +49,17 @@ class RoommatesModule extends FeatureModule {
               parentNavigatorKey: AppNavigator.rootKey,
               builder: (_, _) => const AddRoommateScreen(),
             ),
+            GoRoute(
+              path: ':id/edit',
+              parentNavigatorKey: AppNavigator.rootKey,
+              builder: (_, state) => AddRoommateScreen(roommateId: state.pathParameters['id']),
+            ),
           ],
+        ),
+        GoRoute(
+          path: 'chat',
+          parentNavigatorKey: AppNavigator.rootKey,
+          builder: (_, _) => const ColocationChatScreen(),
         ),
         GoRoute(
           path: 'chores',

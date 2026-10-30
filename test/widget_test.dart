@@ -243,6 +243,20 @@ void main() {
           );
         }
 
+        if (method == 'GET' && path.endsWith('/colocations/mine')) {
+          return HttpTransportResponse(
+            statusCode: 200,
+            body: jsonEncode({
+              'data': {
+                'documentId': 'col-1',
+                'name': 'Appart Victor Hugo',
+                'code': 'ABCD2345',
+                'isCreator': true,
+              },
+            }),
+          );
+        }
+
         if (method == 'GET' && path.endsWith('/roommate-members')) {
           return HttpTransportResponse(
             statusCode: 200,
@@ -255,6 +269,8 @@ void main() {
                   'email': 'camille@univ.fr',
                   'roomNumber': 'Chambre 1',
                   'isPresent': true,
+                  'hasAccount': true,
+                  'isMe': true,
                 },
                 {
                   'documentId': 'rm-2',
@@ -278,7 +294,9 @@ void main() {
                   'documentId': 'exp-1',
                   'title': 'Courses communes',
                   'amount': 40.0,
+                  'paidById': 'rm-1',
                   'paidByName': 'Camille Durand',
+                  'participantIds': ['rm-1', 'rm-2'],
                   'date': '2026-10-20T00:00:00.000Z',
                   'category': 'Alimentation',
                   'isSettlement': false,
@@ -362,6 +380,8 @@ void main() {
     );
 
     // 6. Module Colocation & calcul dynamique des soldes
+    final colocation = await container.read(colocationAsyncProvider.future);
+    expect(colocation?.code, 'ABCD2345');
     await container.read(roommatesAsyncProvider.future);
     await container.read(expensesAsyncProvider.future);
     final balances = container.read(balancesDueProvider);

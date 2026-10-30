@@ -31,6 +31,19 @@
       "type": "string",
       "default": "Hebdomadaire"
     },
+    "nextChoreId": {
+      "type": "string"
+    },
+    "colocation": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::colocation.colocation"
+    },
+    "assignedTo": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::roommate-member.roommate-member"
+    },
     "owner": {
       "type": "relation",
       "relation": "manyToOne",
@@ -38,4 +51,3 @@
     }
   }
 }
-

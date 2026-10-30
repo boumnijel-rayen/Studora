@@ -587,7 +587,15 @@ export interface ApiChoreChore extends Struct.CollectionTypeSchema {
     draftAndPublish: false;
   };
   attributes: {
+    assignedTo: Schema.Attribute.Relation<
+      'manyToOne',
+      'api::roommate-member.roommate-member'
+    >;
     assignedToName: Schema.Attribute.String & Schema.Attribute.Required;
+    colocation: Schema.Attribute.Relation<
+      'manyToOne',
+      'api::colocation.colocation'
+    >;
     createdAt: Schema.Attribute.DateTime;
     createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
       Schema.Attribute.Private;
@@ -598,12 +606,91 @@ export interface ApiChoreChore extends Struct.CollectionTypeSchema {
     locale: Schema.Attribute.String & Schema.Attribute.Private;
     localizations: Schema.Attribute.Relation<'oneToMany', 'api::chore.chore'> &
       Schema.Attribute.Private;
+    nextChoreId: Schema.Attribute.String;
     owner: Schema.Attribute.Relation<
       'manyToOne',
       'plugin::users-permissions.user'
     >;
     publishedAt: Schema.Attribute.DateTime;
     title: Schema.Attribute.String & Schema.Attribute.Required;
+    updatedAt: Schema.Attribute.DateTime;
+    updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+  };
+}
+
+export interface ApiColocationMessageColocationMessage
+  extends Struct.CollectionTypeSchema {
+  collectionName: 'colocation_messages';
+  info: {
+    description: "Message envoy\u00E9 dans la discussion d'une colocation";
+    displayName: 'Colocation Message';
+    pluralName: 'colocation-messages';
+    singularName: 'colocation-message';
+  };
+  options: {
+    draftAndPublish: false;
+  };
+  attributes: {
+    colocation: Schema.Attribute.Relation<
+      'manyToOne',
+      'api::colocation.colocation'
+    >;
+    createdAt: Schema.Attribute.DateTime;
+    createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    locale: Schema.Attribute.String & Schema.Attribute.Private;
+    localizations: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::colocation-message.colocation-message'
+    > &
+      Schema.Attribute.Private;
+    publishedAt: Schema.Attribute.DateTime;
+    sender: Schema.Attribute.Relation<
+      'manyToOne',
+      'plugin::users-permissions.user'
+    >;
+    senderName: Schema.Attribute.String & Schema.Attribute.Required;
+    text: Schema.Attribute.Text & Schema.Attribute.Required;
+    timestamp: Schema.Attribute.DateTime & Schema.Attribute.Required;
+    updatedAt: Schema.Attribute.DateTime;
+    updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+  };
+}
+
+export interface ApiColocationColocation extends Struct.CollectionTypeSchema {
+  collectionName: 'colocations';
+  info: {
+    description: "Logement partag\u00E9 rejoint par ses membres via un code d'invitation";
+    displayName: 'Colocation';
+    pluralName: 'colocations';
+    singularName: 'colocation';
+  };
+  options: {
+    draftAndPublish: false;
+  };
+  attributes: {
+    address: Schema.Attribute.String;
+    code: Schema.Attribute.String &
+      Schema.Attribute.Required &
+      Schema.Attribute.Unique;
+    createdAt: Schema.Attribute.DateTime;
+    createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    creator: Schema.Attribute.Relation<
+      'manyToOne',
+      'plugin::users-permissions.user'
+    >;
+    details: Schema.Attribute.Text;
+    locale: Schema.Attribute.String & Schema.Attribute.Private;
+    localizations: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::colocation.colocation'
+    > &
+      Schema.Attribute.Private;
+    name: Schema.Attribute.String & Schema.Attribute.Required;
+    publishedAt: Schema.Attribute.DateTime;
     updatedAt: Schema.Attribute.DateTime;
     updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
       Schema.Attribute.Private;
@@ -725,6 +812,10 @@ export interface ApiExpenseExpense extends Struct.CollectionTypeSchema {
       >;
     category: Schema.Attribute.String &
       Schema.Attribute.DefaultTo<'Alimentation'>;
+    colocation: Schema.Attribute.Relation<
+      'manyToOne',
+      'api::colocation.colocation'
+    >;
     createdAt: Schema.Attribute.DateTime;
     createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
       Schema.Attribute.Private;
@@ -740,8 +831,20 @@ export interface ApiExpenseExpense extends Struct.CollectionTypeSchema {
       'manyToOne',
       'plugin::users-permissions.user'
     >;
+    paidBy: Schema.Attribute.Relation<
+      'manyToOne',
+      'api::roommate-member.roommate-member'
+    >;
     paidByName: Schema.Attribute.String & Schema.Attribute.Required;
+    participants: Schema.Attribute.Relation<
+      'manyToMany',
+      'api::roommate-member.roommate-member'
+    >;
     publishedAt: Schema.Attribute.DateTime;
+    reimbursedTo: Schema.Attribute.Relation<
+      'manyToOne',
+      'api::roommate-member.roommate-member'
+    >;
     reimbursedToName: Schema.Attribute.String;
     title: Schema.Attribute.String & Schema.Attribute.Required;
     updatedAt: Schema.Attribute.DateTime;
@@ -881,7 +984,7 @@ export interface ApiRoommateMemberRoommateMember
   extends Struct.CollectionTypeSchema {
   collectionName: 'roommate_members';
   info: {
-    description: "Membre d'une colocation";
+    description: "Membre d'une colocation, avec ou sans compte Studora";
     displayName: 'Roommate Member';
     pluralName: 'roommate-members';
     singularName: 'roommate-member';
@@ -890,10 +993,15 @@ export interface ApiRoommateMemberRoommateMember
     draftAndPublish: false;
   };
   attributes: {
+    colocation: Schema.Attribute.Relation<
+      'manyToOne',
+      'api::colocation.colocation'
+    >;
     createdAt: Schema.Attribute.DateTime;
     createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
       Schema.Attribute.Private;
-    email: Schema.Attribute.Email & Schema.Attribute.Required;
+    email: Schema.Attribute.Email;
+    isActive: Schema.Attribute.Boolean & Schema.Attribute.DefaultTo<true>;
     isPresent: Schema.Attribute.Boolean & Schema.Attribute.DefaultTo<true>;
     locale: Schema.Attribute.String & Schema.Attribute.Private;
     localizations: Schema.Attribute.Relation<
@@ -906,12 +1014,16 @@ export interface ApiRoommateMemberRoommateMember
       'manyToOne',
       'plugin::users-permissions.user'
     >;
-    phone: Schema.Attribute.String & Schema.Attribute.Required;
+    phone: Schema.Attribute.String;
     publishedAt: Schema.Attribute.DateTime;
     roomNumber: Schema.Attribute.String & Schema.Attribute.Required;
     updatedAt: Schema.Attribute.DateTime;
     updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
       Schema.Attribute.Private;
+    user: Schema.Attribute.Relation<
+      'manyToOne',
+      'plugin::users-permissions.user'
+    >;
   };
 }
 
@@ -1709,6 +1821,8 @@ declare module '@strapi/strapi' {
       'api::app-notification.app-notification': ApiAppNotificationAppNotification;
       'api::app-setting.app-setting': ApiAppSettingAppSetting;
       'api::chore.chore': ApiChoreChore;
+      'api::colocation-message.colocation-message': ApiColocationMessageColocationMessage;
+      'api::colocation.colocation': ApiColocationColocation;
       'api::course.course': ApiCourseCourse;
       'api::deadline.deadline': ApiDeadlineDeadline;
       'api::expense.expense': ApiExpenseExpense;

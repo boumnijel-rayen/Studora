@@ -15,12 +15,10 @@ class ExpensesScreen extends ConsumerWidget {
     final expensesAsync = ref.watch(expensesAsyncProvider);
     final expenses = expensesAsync.value ?? const [];
     final sharedExpenses = ref.watch(sharedExpensesProvider);
-    final roommates = ref.watch(roommatesProvider);
+    final myShare = ref.watch(myExpensesShareProvider);
     final currency = ref.watch(preferencesProvider).currency;
 
     final total = sharedExpenses.fold<double>(0, (a, e) => a + e.amount);
-    final participantsCount = roommates.isNotEmpty ? roommates.length : 1;
-    final perPerson = total / participantsCount;
 
     return AppScaffold(
       title: 'Dépenses Communes',
@@ -74,7 +72,7 @@ class ExpensesScreen extends ConsumerWidget {
                           ),
                         ),
                         Text(
-                          'Soit ${Formatters.money(perPerson, symbol: currency)} / personne ($participantsCount coloc${participantsCount > 1 ? 's' : ''})',
+                          'Dont votre part : ${Formatters.money(myShare, symbol: currency)}',
                           style: context.text.bodySmall,
                         ),
                       ],

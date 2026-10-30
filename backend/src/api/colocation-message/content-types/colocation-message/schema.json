@@ -1,0 +1,37 @@
+{
+  "kind": "collectionType",
+  "collectionName": "colocation_messages",
+  "info": {
+    "singularName": "colocation-message",
+    "pluralName": "colocation-messages",
+    "displayName": "Colocation Message",
+    "description": "Message envoyé dans la discussion d'une colocation"
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "attributes": {
+    "text": {
+      "type": "text",
+      "required": true
+    },
+    "senderName": {
+      "type": "string",
+      "required": true
+    },
+    "timestamp": {
+      "type": "datetime",
+      "required": true
+    },
+    "colocation": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::colocation.colocation"
+    },
+    "sender": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "plugin::users-permissions.user"
+    }
+  }
+}

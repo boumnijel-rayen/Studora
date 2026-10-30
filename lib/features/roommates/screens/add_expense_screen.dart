@@ -16,7 +16,8 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
   final _formKey = GlobalKey<FormState>();
   final _titleCtrl = TextEditingController();
   final _amountCtrl = TextEditingController();
-  String? _paidByName;
+  final _excludedIds = <String>{};
+  String? _paidById;
   String _category = 'Alimentation';
   DateTime _date = DateTime.now();
   bool _saving = false;
@@ -28,20 +29,23 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
     super.dispose();
   }
 
-  List<String> _buildCandidateNames() {
-    final roommates = ref.watch(roommatesProvider);
-    final user = ref.watch(currentUserProvider);
-    return <String>{
-      if (user != null && user.fullName.trim().isNotEmpty) user.fullName.trim(),
-      for (final r in roommates)
-        if (r.name.trim().isNotEmpty) r.name.trim(),
-    }.toList();
+  String? _effectivePayer(List<Roommate> members) {
+    if (members.any((m) => m.id == _paidById)) return _paidById;
+    return ref.read(currentRoommateProvider)?.id ?? members.firstOrNull?.id;
   }
 
   Future<void> _save() async {
-    final candidates = _buildCandidateNames();
-    final payer = _paidByName ?? (candidates.isNotEmpty ? candidates.first : null);
+    final members = ref.read(roommatesProvider);
+    final payer = _effectivePayer(members);
+    final participantIds = [
+      for (final m in members)
+        if (!_excludedIds.contains(m.id)) m.id,
+    ];
     if (!_formKey.currentState!.validate() || payer == null) return;
+    if (participantIds.isEmpty) {
+      AppSnackbar.error(context, 'Sélectionnez au moins un colocataire pour le partage');
+      return;
+    }
 
     setState(() => _saving = true);
     try {
@@ -51,9 +55,11 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
         id: '',
         title: _titleCtrl.text.trim(),
         amount: amount,
-        paidByName: payer,
+        paidById: payer,
+        paidByName: '',
         date: _date,
         category: _category,
+        participantIds: participantIds,
       );
 
       await ref.read(expensesAsyncProvider.notifier).add(newExp);
@@ -77,11 +83,8 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final candidates = _buildCandidateNames();
-    final effectivePayer =
-        (_paidByName != null && candidates.contains(_paidByName))
-        ? _paidByName
-        : (candidates.isNotEmpty ? candidates.first : null);
+    final members = ref.watch(roommatesProvider);
+    final names = {for (final m in members) m.id: m.name};
     final currency = ref.watch(preferencesProvider).currency;
 
     return AppScaffold(
@@ -113,10 +116,30 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
               AppSpacing.gapMd,
               AppDropdownField<String>(
                 label: 'Payé par',
-                value: effectivePayer,
-                items: candidates,
-                itemLabel: (name) => name,
-                onChanged: (v) => setState(() => _paidByName = v),
+                value: _effectivePayer(members),
+                items: names.keys.toList(),
+                itemLabel: (id) => names[id] ?? '',
+                onChanged: (v) => setState(() => _paidById = v),
+              ),
+              AppSpacing.gapMd,
+              const Text('Partagée entre', style: TextStyle(fontWeight: FontWeight.w600)),
+              AppSpacing.gapXs,
+              Wrap(
+                spacing: AppSpacing.xs,
+                children: [
+                  for (final m in members)
+                    FilterChip(
+                      label: Text(m.name),
+                      selected: !_excludedIds.contains(m.id),
+                      onSelected: (selected) => setState(() {
+                        if (selected) {
+                          _excludedIds.remove(m.id);
+                        } else {
+                          _excludedIds.add(m.id);
+                        }
+                      }),
+                    ),
+                ],
               ),
               AppSpacing.gapMd,
               const Text('Catégorie', style: TextStyle(fontWeight: FontWeight.w600)),

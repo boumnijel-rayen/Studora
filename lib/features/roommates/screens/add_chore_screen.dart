@@ -17,8 +17,9 @@ class AddChoreScreen extends ConsumerStatefulWidget {
 class _AddChoreScreenState extends ConsumerState<AddChoreScreen> {
   final _formKey = GlobalKey<FormState>();
   final _titleCtrl = TextEditingController();
-  String? _assignedToName;
+  String? _assignedToId;
   String _frequency = 'Hebdomadaire';
+  DateTime _dueDate = DateTime.now().add(const Duration(days: 3));
   bool _saving = false;
 
   @override
@@ -27,20 +28,14 @@ class _AddChoreScreenState extends ConsumerState<AddChoreScreen> {
     super.dispose();
   }
 
-  List<String> _buildCandidateNames() {
-    final roommates = ref.watch(roommatesProvider);
-    final user = ref.watch(currentUserProvider);
-    final names = <String>{
-      if (user != null && user.fullName.trim().isNotEmpty) user.fullName.trim(),
-      for (final r in roommates)
-        if (r.name.trim().isNotEmpty) r.name.trim(),
-    }.toList();
-    return names;
+  String? _effectiveAssignee(List<Roommate> members) {
+    if (members.any((m) => m.id == _assignedToId)) return _assignedToId;
+    return ref.read(currentRoommateProvider)?.id ?? members.firstOrNull?.id;
   }
 
   Future<void> _save() async {
-    final candidates = _buildCandidateNames();
-    final selected = _assignedToName ?? (candidates.isNotEmpty ? candidates.first : null);
+    final members = ref.read(roommatesProvider);
+    final selected = _effectiveAssignee(members);
     if (!_formKey.currentState!.validate() || selected == null) {
       if (selected == null) {
         AppSnackbar.error(context, 'Veuillez assigner la tâche à un colocataire');
@@ -53,8 +48,9 @@ class _AddChoreScreenState extends ConsumerState<AddChoreScreen> {
       final chore = Chore(
         id: '',
         title: _titleCtrl.text.trim(),
-        assignedToName: selected,
-        dueDate: DateTime.now().add(const Duration(days: 3)),
+        assignedToId: selected,
+        assignedToName: '',
+        dueDate: _dueDate,
         frequency: _frequency,
       );
 
@@ -75,11 +71,8 @@ class _AddChoreScreenState extends ConsumerState<AddChoreScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final candidates = _buildCandidateNames();
-    final effectiveAssigned =
-        (_assignedToName != null && candidates.contains(_assignedToName))
-        ? _assignedToName
-        : (candidates.isNotEmpty ? candidates.first : null);
+    final members = ref.watch(roommatesProvider);
+    final names = {for (final m in members) m.id: m.name};
 
     return AppScaffold(
       title: 'Nouvelle Tâche',
@@ -102,11 +95,11 @@ class _AddChoreScreenState extends ConsumerState<AddChoreScreen> {
                   Expanded(
                     child: AppDropdownField<String>(
                       label: 'Assignée à',
-                      value: effectiveAssigned,
+                      value: _effectiveAssignee(members),
                       hint: 'Choisir le colocataire',
-                      items: candidates,
-                      itemLabel: (name) => name,
-                      onChanged: (v) => setState(() => _assignedToName = v),
+                      items: names.keys.toList(),
+                      itemLabel: (id) => names[id] ?? '',
+                      onChanged: (v) => setState(() => _assignedToId = v),
                     ),
                   ),
                   AppSpacing.gapXs,
@@ -118,23 +111,35 @@ class _AddChoreScreenState extends ConsumerState<AddChoreScreen> {
                 ],
               ),
               AppSpacing.gapMd,
+              AppDateField(
+                label: 'À faire pour le',
+                initialValue: _dueDate,
+                onChanged: (d) => setState(() => _dueDate = d),
+              ),
+              AppSpacing.gapMd,
               const Text(
                 'Fréquence de rotation',
                 style: TextStyle(fontWeight: FontWeight.w600),
               ),
               AppSpacing.gapXs,
-              Row(
+              Wrap(
+                spacing: AppSpacing.xs,
                 children: [
-                  for (final f in ['Quotidien', 'Hebdomadaire', 'Mensuel']) ...[
+                  for (final f in ['Une seule fois', 'Quotidien', 'Hebdomadaire', 'Mensuel'])
                     ChoiceChip(
                       label: Text(f),
                       selected: _frequency == f,
                       onSelected: (_) => setState(() => _frequency = f),
                     ),
-                    AppSpacing.gapXs,
-                  ],
                 ],
               ),
+              if (_frequency != 'Une seule fois') ...[
+                AppSpacing.gapXs,
+                Text(
+                  'Une fois validée, la tâche revient automatiquement pour le colocataire suivant.',
+                  style: context.text.bodySmall,
+                ),
+              ],
               AppSpacing.gapXl,
               AppButton(
                 label: 'Enregistrer la tâche',

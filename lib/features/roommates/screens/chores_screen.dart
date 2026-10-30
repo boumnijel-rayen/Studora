@@ -113,8 +113,18 @@ class _ChoreTile extends ConsumerWidget {
                 children: [
                   AppAvatar(name: chore.assignedToName, size: 20),
                   AppSpacing.gapXs,
+                  Flexible(
+                    child: Text(
+                      chore.assignedToName,
+                      overflow: TextOverflow.ellipsis,
+                      style: context.text.labelSmall?.copyWith(
+                        color: context.colors.textSecondary,
+                      ),
+                    ),
+                  ),
+                  AppSpacing.gapXs,
                   Text(
-                    chore.assignedToName,
+                    Formatters.shortDate(chore.dueDate.toLocal()),
                     style: context.text.labelSmall?.copyWith(
                       color: context.colors.textSecondary,
                     ),

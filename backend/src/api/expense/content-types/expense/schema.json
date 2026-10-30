@@ -39,6 +39,26 @@
       "type": "string",
       "default": "Alimentation"
     },
+    "colocation": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::colocation.colocation"
+    },
+    "paidBy": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::roommate-member.roommate-member"
+    },
+    "reimbursedTo": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::roommate-member.roommate-member"
+    },
+    "participants": {
+      "type": "relation",
+      "relation": "manyToMany",
+      "target": "api::roommate-member.roommate-member"
+    },
     "owner": {
       "type": "relation",
       "relation": "manyToOne",
@@ -46,4 +66,3 @@
     }
   }
 }
-
