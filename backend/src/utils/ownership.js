@@ -4,6 +4,8 @@
  * Helpers réutilisables pour l'isolation stricte des données par utilisateur
  * (propriétaire `owner`) sur les Content Types Strapi 5.
  */
+const { stripPrivateFields } = require('./sanitize');
+
 function requireUser(ctx) {
   const user = ctx.state.user;
   if (!user) {
@@ -32,10 +34,10 @@ function createOwnedController(
           ...(ctx.query?.filters || {}),
           owner: { id: user.id },
         },
-        populate: ctx.query?.populate || defaultPopulate,
+        populate: defaultPopulate,
       });
 
-      return { data: entries, meta: { count: entries.length } };
+      return { data: stripPrivateFields(entries), meta: { count: entries.length } };
     },
 
     async findOne(ctx) {
@@ -52,7 +54,8 @@ function createOwnedController(
         return ctx.notFound('Ressource introuvable ou accès refusé.');
       }
 
-      return { data: entry };
+      const { owner, ...safeEntry } = entry;
+      return { data: stripPrivateFields(safeEntry) };
     },
 
     async create(ctx) {
@@ -78,7 +81,7 @@ function createOwnedController(
       });
 
       ctx.status = 201;
-      return { data: created };
+      return { data: stripPrivateFields(created) };
     },
 
     async update(ctx) {
@@ -111,7 +114,7 @@ function createOwnedController(
         populate: defaultPopulate,
       });
 
-      return { data: updated };
+      return { data: stripPrivateFields(updated) };
     },
 
     async delete(ctx) {

@@ -2,6 +2,7 @@
 
 const { createCoreController } = require('@strapi/strapi').factories;
 const { requireUser } = require('../../../utils/ownership');
+const { isMemberOfGroup } = require('../../../utils/study-groups');
 
 const UID = 'api::group-activity.group-activity';
 
@@ -10,9 +11,18 @@ module.exports = createCoreController(UID, ({ strapi }) => ({
     const user = requireUser(ctx);
     if (!user) return;
 
-    const groupId = ctx.query?.groupId || ctx.query?.filters?.groupId?.$eq;
+    const groupId = String(ctx.query?.groupId || '').trim();
+    if (!groupId) {
+      return ctx.badRequest('groupId est obligatoire.');
+    }
+
+    const allowed = await isMemberOfGroup(strapi, groupId, user.id);
+    if (!allowed) {
+      return ctx.forbidden('Vous devez être membre de ce groupe pour consulter ses activités.');
+    }
+
     const entries = await strapi.documents(UID).findMany({
-      filters: groupId ? { groupId: { $eq: groupId } } : (ctx.query?.filters || {}),
+      filters: { groupId: { $eq: groupId } },
       sort: { date: 'asc' },
     });
 
@@ -24,6 +34,11 @@ module.exports = createCoreController(UID, ({ strapi }) => ({
     if (!user) return;
 
     const raw = ctx.request.body?.data || ctx.request.body || {};
+    const allowed = await isMemberOfGroup(strapi, raw.groupId, user.id);
+    if (!allowed) {
+      return ctx.forbidden('Vous devez rejoindre ce groupe avant de planifier une activité.');
+    }
+
     const created = await strapi.documents(UID).create({
       data: {
         title: raw.title,
@@ -39,4 +54,3 @@ module.exports = createCoreController(UID, ({ strapi }) => ({
     return { data: created };
   },
 }));
-

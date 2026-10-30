@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/core.dart';
+import '../groups_routes.dart';
 import '../models/group_models.dart';
 import '../providers/groups_providers.dart';
 
@@ -128,11 +129,12 @@ class _GroupDetailScreenState extends ConsumerState<GroupDetailScreen> with Sing
                 icon: const Icon(Icons.event_available_rounded),
                 onPressed: () => _openCreateActivitySheet(group),
               ),
-            IconButton(
-              tooltip: 'Ouvrir le chat',
-              icon: const Icon(Icons.chat_bubble_rounded),
-              onPressed: () => context.push('/groups/${group.id}/chat'),
-            ),
+            if (group.isJoined)
+              IconButton(
+                tooltip: 'Ouvrir le chat',
+                icon: const Icon(Icons.chat_bubble_rounded),
+                onPressed: () => context.push('/groups/${group.id}/chat'),
+              ),
           ],
           bottom: AppTabBar(
             controller: _tabCtrl,
@@ -156,18 +158,24 @@ class _GroupDetailScreenState extends ConsumerState<GroupDetailScreen> with Sing
                         AppSpacing.gapXs,
                         Text(group.description, style: context.text.bodyMedium),
                         AppSpacing.gapMd,
-                        Row(
-                          children: [
-                            const Icon(Icons.vpn_key_rounded, size: 16),
-                            AppSpacing.gapXs,
-                            Text('Code d\'accès : ${group.code}', style: context.text.labelMedium),
-                            const Spacer(),
-                            TextButton(
-                              onPressed: () => AppSnackbar.info(context, 'Code ${group.code} copié !'),
-                              child: const Text('Copier'),
-                            ),
-                          ],
-                        ),
+                        if (group.code.isNotEmpty)
+                          Row(
+                            children: [
+                              const Icon(Icons.vpn_key_rounded, size: 16),
+                              AppSpacing.gapXs,
+                              Text('Code d\'accès : ${group.code}', style: context.text.labelMedium),
+                              const Spacer(),
+                              TextButton(
+                                onPressed: () => AppSnackbar.info(context, 'Code ${group.code} copié !'),
+                                child: const Text('Copier'),
+                              ),
+                            ],
+                          )
+                        else
+                          Text(
+                            'Demandez le code d\'accès à un membre pour rejoindre ce groupe.',
+                            style: context.text.bodySmall,
+                          ),
                       ],
                     ),
                   ),
@@ -181,21 +189,10 @@ class _GroupDetailScreenState extends ConsumerState<GroupDetailScreen> with Sing
                     )
                   else
                     AppButton(
-                      label: 'Rejoindre ce groupe',
+                      label: 'Rejoindre avec un code',
                       icon: Icons.group_add_rounded,
                       expand: true,
-                      onPressed: () async {
-                        try {
-                          await ref.read(groupsAsyncProvider.notifier).joinGroup(group.code);
-                          if (context.mounted) {
-                            AppSnackbar.success(context, 'Vous avez rejoint le groupe !');
-                          }
-                        } catch (e) {
-                          if (context.mounted) {
-                            AppSnackbar.error(context, ApiException.fromError(e).message);
-                          }
-                        }
-                      },
+                      onPressed: () => context.push(GroupsRoutes.join),
                     ),
                 ],
               ),

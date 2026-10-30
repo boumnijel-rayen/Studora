@@ -45,11 +45,6 @@ class _CreateGroupScreenState extends ConsumerState<CreateGroupScreen> {
     final subject = subjects.where((s) => s.id == _selectedSubjectId).firstOrNull;
     if (subject == null) return;
 
-    final prefix = subject.shortName.length >= 3
-        ? subject.shortName.toUpperCase().substring(0, 3)
-        : subject.shortName.toUpperCase().padRight(3, 'X');
-    final code = '$prefix${(DateTime.now().millisecondsSinceEpoch % 900 + 100)}';
-
     setState(() => _isSaving = true);
 
     final group = StudyGroup(
@@ -59,7 +54,7 @@ class _CreateGroupScreenState extends ConsumerState<CreateGroupScreen> {
       subjectId: subject.id,
       subjectName: subject.name,
       memberNames: [user.fullName],
-      code: code,
+      code: '', // Généré par le serveur.
       colorIndex: subject.colorIndex,
       isJoined: true,
     );

@@ -80,6 +80,11 @@ final groupActivitiesFamilyProvider =
       final user = ref.watch(currentUserProvider);
       if (user == null || groupId.isEmpty) return const [];
 
+      // Les activités sont réservées aux membres du groupe.
+      final groups = await ref.watch(groupsAsyncProvider.future);
+      final group = groups.where((g) => g.id == groupId).firstOrNull;
+      if (group == null || !group.isJoined) return const [];
+
       final client = ref.read(strapiClientProvider);
       final items = await client.getList(
         '/group-activities',

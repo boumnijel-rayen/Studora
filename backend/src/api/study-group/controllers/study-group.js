@@ -2,12 +2,12 @@
 
 const { createCoreController } = require('@strapi/strapi').factories;
 const { requireUser } = require('../../../utils/ownership');
+const { generateUniqueCode, stripPrivateFields, userDisplayName } = require('../../../utils/sanitize');
 
 const UID = 'api::study-group.study-group';
 
-function userDisplayName(user) {
-  const full = `${user.firstName || ''} ${user.lastName || ''}`.trim();
-  return full || user.username || user.email || 'Étudiant';
+function publicUser(user) {
+  return user ? { id: user.id, name: userDisplayName(user) } : null;
 }
 
 function serializeGroup(group, userId) {
@@ -19,11 +19,15 @@ function serializeGroup(group, userId) {
   const storedNames = Array.isArray(group.memberNames) ? group.memberNames : [];
   const memberNames = Array.from(new Set([...storedNames, ...namesFromRelation]));
 
-  return {
+  return stripPrivateFields({
     ...group,
+    // Le code d'invitation n'est communiqué qu'aux membres du groupe.
+    code: isJoined ? group.code : '',
+    creator: publicUser(group.creator),
+    members: members.map(publicUser),
     memberNames,
     isJoined,
-  };
+  });
 }
 
 module.exports = createCoreController(UID, ({ strapi }) => ({
@@ -32,7 +36,6 @@ module.exports = createCoreController(UID, ({ strapi }) => ({
     if (!user) return;
 
     const entries = await strapi.documents(UID).findMany({
-      ...ctx.query,
       populate: { creator: true, members: true, subject: true },
     });
 
@@ -61,7 +64,7 @@ module.exports = createCoreController(UID, ({ strapi }) => ({
 
     const raw = ctx.request.body?.data || ctx.request.body || {};
     const displayName = userDisplayName(user);
-    const code = (raw.code || `GRP${Date.now().toString().slice(-4)}`).toUpperCase();
+    const code = await generateUniqueCode(strapi, UID);
 
     const created = await strapi.documents(UID).create({
       data: {
@@ -98,7 +101,14 @@ module.exports = createCoreController(UID, ({ strapi }) => ({
     });
 
     if (!group) {
-      return ctx.notFound('Aucun groupe ne correspond à ce code d\'invitation.');
+      const colocation = await strapi.documents('api::colocation.colocation').findFirst({
+        filters: { code: { $eqi: code } },
+      });
+      return ctx.notFound(
+        colocation
+          ? 'Cette clé correspond à une colocation : rejoignez-la depuis le module Colocation.'
+          : 'Aucun groupe ne correspond à ce code d\'invitation.',
+      );
     }
 
     const existingMemberIds = (group.members || []).map((m) => m.id);
@@ -140,4 +150,3 @@ module.exports = createCoreController(UID, ({ strapi }) => ({
     return { data: { documentId: existing.documentId, deleted: true } };
   },
 }));
-
