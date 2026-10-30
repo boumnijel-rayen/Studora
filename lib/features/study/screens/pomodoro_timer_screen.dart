@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/core.dart';
+import '../models/study_models.dart';
 import '../providers/study_providers.dart';
 import '../study_routes.dart';
 
@@ -32,12 +33,16 @@ class _PomodoroTimerScreenState extends ConsumerState<PomodoroTimerScreen> {
   Timer? _timer;
   bool _isRunning = false;
   int _completedSessions = 0;
-  String? _selectedSubject = 'Mathématiques';
+  String? _selectedSubjectId;
 
   @override
   void initState() {
     super.initState();
     final cfg = ref.read(pomodoroConfigProvider);
+    final subjects = ref.read(subjectsProvider);
+    if (subjects.isNotEmpty) {
+      _selectedSubjectId = subjects.first.id;
+    }
     _initMode(PomodoroMode.work, cfg.workMinutes);
   }
 
@@ -77,23 +82,50 @@ class _PomodoroTimerScreenState extends ConsumerState<PomodoroTimerScreen> {
     });
   }
 
-  void _onFinished() {
+  Future<void> _onFinished() async {
     _timer?.cancel();
+    final completedWork = _mode == PomodoroMode.work;
     setState(() {
       _isRunning = false;
-      if (_mode == PomodoroMode.work) {
+      if (completedWork) {
         _completedSessions++;
       }
     });
 
     final cfg = ref.read(pomodoroConfigProvider);
-    if (_mode == PomodoroMode.work) {
+    if (completedWork) {
+      // Enregistre la session réalisée dans Strapi
+      final subjects = ref.read(subjectsProvider);
+      final subject = subjects.where((s) => s.id == _selectedSubjectId).firstOrNull;
+      if (subject != null) {
+        try {
+          await ref.read(studySessionsAsyncProvider.notifier).add(
+            StudySession(
+              id: '',
+              subjectId: subject.id,
+              subjectName: subject.name,
+              durationMinutes: cfg.workMinutes,
+              date: DateTime.now(),
+              colorIndex: subject.colorIndex,
+              notes: 'Session Pomodoro réalisée',
+              isCompleted: true,
+            ),
+          );
+        } catch (_) {}
+      }
+
+      if (!mounted) return;
       final isLong = _completedSessions % cfg.sessionsBeforeLongBreak == 0;
       _switchMode(isLong ? PomodoroMode.longBreak : PomodoroMode.shortBreak);
-      AppSnackbar.success(context, 'Bravo ! Session terminée. Prenez une pause méritée ☕');
+      AppSnackbar.success(context, 'Bravo ! Session enregistrée. Prenez une pause méritée ☕');
+      if (cfg.autoStartBreaks) {
+        _startTimer();
+      }
     } else {
       _switchMode(PomodoroMode.work);
-      AppSnackbar.info(context, 'Pause terminée, retour au travail ! 💪');
+      if (mounted) {
+        AppSnackbar.info(context, 'Pause terminée, retour au travail ! 💪');
+      }
     }
   }
 
@@ -117,6 +149,10 @@ class _PomodoroTimerScreenState extends ConsumerState<PomodoroTimerScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final subjects = ref.watch(subjectsProvider);
+    final validSubjectId = subjects.any((s) => s.id == _selectedSubjectId)
+        ? _selectedSubjectId
+        : (subjects.isNotEmpty ? subjects.first.id : null);
     final progress = _totalSeconds == 0 ? 0.0 : (_totalSeconds - _remainingSeconds) / _totalSeconds;
 
     return AppScaffold(
@@ -132,7 +168,6 @@ class _PomodoroTimerScreenState extends ConsumerState<PomodoroTimerScreen> {
         builder: (context, constraints) {
           const hPadding = AppSpacing.md;
           final contentWidth = constraints.maxWidth - hPadding * 2;
-          // L'anneau s'adapte à la largeur disponible (max 260, min 180).
           final ringSize = (contentWidth * 0.78).clamp(180.0, 260.0);
 
           return Center(
@@ -141,8 +176,6 @@ class _PomodoroTimerScreenState extends ConsumerState<PomodoroTimerScreen> {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  // Sélecteur de mode : passe à la ligne si l'écran est trop étroit,
-                  // chaque mode reste entièrement lisible et sélectionnable.
                   Wrap(
                     alignment: WrapAlignment.center,
                     spacing: AppSpacing.xs,
@@ -164,7 +197,7 @@ class _PomodoroTimerScreenState extends ConsumerState<PomodoroTimerScreen> {
                   AppSpacing.gapLg,
 
                   // Matière active
-                  if (_mode == PomodoroMode.work) ...[
+                  if (_mode == PomodoroMode.work && subjects.isNotEmpty) ...[
                     Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
@@ -175,18 +208,18 @@ class _PomodoroTimerScreenState extends ConsumerState<PomodoroTimerScreen> {
                           child: ConstrainedBox(
                             constraints: const BoxConstraints(maxWidth: 220),
                             child: DropdownButton<String>(
-                              value: _selectedSubject,
+                              value: validSubjectId,
                               isExpanded: true,
                               underline: const SizedBox(),
-                              items: MockSharedData.subjects
+                              items: subjects
                                   .map(
                                     (s) => DropdownMenuItem(
-                                      value: s.name,
+                                      value: s.id,
                                       child: Text(s.name, overflow: TextOverflow.ellipsis),
                                     ),
                                   )
                                   .toList(),
-                              onChanged: (v) => setState(() => _selectedSubject = v),
+                              onChanged: (v) => setState(() => _selectedSubjectId = v),
                             ),
                           ),
                         ),
@@ -263,7 +296,6 @@ class _PomodoroTimerScreenState extends ConsumerState<PomodoroTimerScreen> {
     );
   }
 
-  /// Largeur minimale pour aligner [Réinitialiser] [▶] [Passer] sur une ligne.
   static const double _inlineActionsMinWidth = 460;
 
   Widget _buildActions(double availableWidth) {
@@ -288,7 +320,6 @@ class _PomodoroTimerScreenState extends ConsumerState<PomodoroTimerScreen> {
       onPressed: _onFinished,
     );
 
-    // Écrans larges : disposition historique sur une seule ligne.
     if (availableWidth >= _inlineActionsMinWidth) {
       return Row(
         mainAxisAlignment: MainAxisAlignment.center,
@@ -296,9 +327,6 @@ class _PomodoroTimerScreenState extends ConsumerState<PomodoroTimerScreen> {
       );
     }
 
-    // Écrans étroits : bouton principal centré, actions secondaires dessous.
-    // Le Wrap les place côte à côte si possible, sinon l'une sous l'autre :
-    // aucun bouton n'est jamais tronqué ni hors écran.
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [

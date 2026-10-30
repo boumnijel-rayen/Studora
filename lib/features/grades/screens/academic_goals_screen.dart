@@ -24,32 +24,85 @@ class _AcademicGoalsScreenState extends ConsumerState<AcademicGoalsScreen> {
     super.dispose();
   }
 
-  void _addGoal() {
+  Future<void> _addGoal(BuildContext sheetContext) async {
     final title = _titleCtrl.text.trim();
     final target = double.tryParse(_targetCtrl.text.replaceAll(',', '.')) ?? 14.0;
     if (title.isEmpty) return;
 
+    final subjects = ref.read(subjectsProvider);
     final subName = _selectedSubjectId == null
         ? 'Moyenne Générale'
-        : MockSharedData.subjects.firstWhere((s) => s.id == _selectedSubjectId).name;
+        : (subjects.where((s) => s.id == _selectedSubjectId).firstOrNull?.name ?? 'Matière');
 
     final goal = AcademicGoal(
-      id: 'goal-${DateTime.now().millisecondsSinceEpoch}',
+      id: '',
       title: title,
       targetAverage: target,
       subjectName: subName,
       subjectId: _selectedSubjectId,
     );
 
-    ref.read(academicGoalsProvider.notifier).add(goal);
-    _titleCtrl.clear();
-    Navigator.pop(context);
-    AppSnackbar.success(context, 'Objectif académique défini !');
+    try {
+      await ref.read(academicGoalsAsyncProvider.notifier).add(goal);
+      _titleCtrl.clear();
+      if (sheetContext.mounted) {
+        Navigator.pop(sheetContext);
+      }
+      if (mounted) {
+        AppSnackbar.success(context, 'Objectif académique défini !');
+      }
+    } catch (e) {
+      if (mounted) {
+        AppSnackbar.error(context, ApiException.fromError(e).message);
+      }
+    }
+  }
+
+  void _openCreateGoalSheet() {
+    final subjects = ref.read(subjectsProvider);
+    AppBottomSheet.show(
+      context,
+      title: 'Définir un objectif',
+      child: StatefulBuilder(
+        builder: (sheetCtx, setSheetState) => Column(
+          children: [
+            AppTextField(
+              controller: _titleCtrl,
+              label: 'Titre de l\'objectif',
+              hint: 'ex: Obtenir la mention Bien',
+            ),
+            AppSpacing.gapMd,
+            AppDropdownField<String?>(
+              label: 'Matière ou Général',
+              value: subjects.any((s) => s.id == _selectedSubjectId) ? _selectedSubjectId : null,
+              items: [null, ...subjects.map((s) => s.id)],
+              itemLabel: (id) => id == null
+                  ? 'Moyenne générale'
+                  : subjects.firstWhere((s) => s.id == id).name,
+              onChanged: (v) => setSheetState(() => _selectedSubjectId = v),
+            ),
+            AppSpacing.gapMd,
+            AppTextField(
+              controller: _targetCtrl,
+              label: 'Moyenne cible (sur 20)',
+              hint: 'ex: 15.0',
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            ),
+            AppSpacing.gapLg,
+            AppButton(
+              label: 'Enregistrer l\'objectif',
+              expand: true,
+              onPressed: () => _addGoal(sheetCtx),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
-    final goals = ref.watch(academicGoalsProvider);
+    final goalsAsync = ref.watch(academicGoalsAsyncProvider);
     final overallAvg = ref.watch(overallAverageProvider);
     final subAvgs = ref.watch(subjectAveragesProvider);
 
@@ -59,58 +112,41 @@ class _AcademicGoalsScreenState extends ConsumerState<AcademicGoalsScreen> {
         IconButton(
           tooltip: 'Nouvel objectif',
           icon: const Icon(Icons.add_rounded),
-          onPressed: () {
-            AppBottomSheet.show(
-              context,
-              title: 'Définir un objectif',
-              child: Column(
-                children: [
-                  AppTextField(
-                    controller: _titleCtrl,
-                    label: 'Titre de l\'objectif',
-                    hint: 'ex: Obtenir la mention Bien',
-                  ),
-                  AppSpacing.gapMd,
-                  AppDropdownField<String?>(
-                    label: 'Matière ou Général',
-                    value: _selectedSubjectId,
-                    items: [null, ...MockSharedData.subjects.map((s) => s.id)],
-                    itemLabel: (id) => id == null
-                        ? 'Moyenne générale'
-                        : MockSharedData.subjects.firstWhere((s) => s.id == id).name,
-                    onChanged: (v) => setState(() => _selectedSubjectId = v),
-                  ),
-                  AppSpacing.gapMd,
-                  AppTextField(
-                    controller: _targetCtrl,
-                    label: 'Moyenne cible (sur 20)',
-                    hint: 'ex: 15.0',
-                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                  ),
-                  AppSpacing.gapLg,
-                  AppButton(
-                    label: 'Enregistrer l\'objectif',
-                    expand: true,
-                    onPressed: _addGoal,
-                  ),
-                ],
-              ),
-            );
-          },
+          onPressed: _openCreateGoalSheet,
         ),
       ],
-      body: ListView(
-        padding: const EdgeInsets.all(AppSpacing.md),
-        children: [
-          for (final g in goals) ...[
-            _GoalCard(
-              goal: g,
-              currentValue: g.subjectId == null ? overallAvg : (subAvgs[g.subjectId] ?? 0.0),
-              onDelete: () => ref.read(academicGoalsProvider.notifier).delete(g.id),
-            ),
-            AppSpacing.gapSm,
+      body: AppAsyncView<List<AcademicGoal>>(
+        value: goalsAsync,
+        isEmpty: (list) => list.isEmpty,
+        empty: AppEmptyState(
+          icon: Icons.flag_outlined,
+          title: 'Aucun objectif défini',
+          message: 'Fixez-vous un objectif de moyenne générale ou par matière pour suivre votre progression.',
+          actionLabel: 'Définir un objectif',
+          onAction: _openCreateGoalSheet,
+        ),
+        onRetry: () => ref.invalidate(academicGoalsAsyncProvider),
+        data: (goals) => ListView(
+          padding: const EdgeInsets.all(AppSpacing.md),
+          children: [
+            for (final g in goals) ...[
+              _GoalCard(
+                goal: g,
+                currentValue: g.subjectId == null ? overallAvg : (subAvgs[g.subjectId] ?? 0.0),
+                onDelete: () async {
+                  try {
+                    await ref.read(academicGoalsAsyncProvider.notifier).delete(g.id);
+                  } catch (e) {
+                    if (context.mounted) {
+                      AppSnackbar.error(context, ApiException.fromError(e).message);
+                    }
+                  }
+                },
+              ),
+              AppSpacing.gapSm,
+            ],
           ],
-        ],
+        ),
       ),
     );
   }
@@ -129,7 +165,9 @@ class _GoalCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final progress = (currentValue / goal.targetAverage).clamp(0.0, 1.0);
+    final progress = goal.targetAverage > 0
+        ? (currentValue / goal.targetAverage).clamp(0.0, 1.0)
+        : 0.0;
     final reached = currentValue >= goal.targetAverage;
 
     return AppCard(
@@ -183,7 +221,9 @@ class _GoalCard extends StatelessWidget {
           ),
           AppSpacing.gapXxs,
           Text(
-            reached ? 'Objectif atteint ! Félicitations 🎉' : 'Il vous reste ${(goal.targetAverage - currentValue).toStringAsFixed(1)} pts à rattraper',
+            reached
+                ? 'Objectif atteint ! Félicitations 🎉'
+                : 'Il vous reste ${(goal.targetAverage - currentValue).toStringAsFixed(1)} pts à rattraper',
             style: context.text.labelSmall?.copyWith(
               color: reached ? context.colors.success : context.colors.textSecondary,
             ),

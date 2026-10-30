@@ -12,13 +12,14 @@ class ChoresScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final chores = ref.watch(choresProvider);
+    final choresAsync = ref.watch(choresAsyncProvider);
+    final chores = choresAsync.value ?? const [];
     final pending = chores.where((c) => !c.isCompleted).toList();
     final completed = chores.where((c) => c.isCompleted).toList();
 
     return AppScaffold(
       title: 'Tâches ménagères',
-      subtitle: '${pending.length} tâches à réaliser',
+      subtitle: '${pending.length} tâche${pending.length > 1 ? 's' : ''} à réaliser',
       actions: [
         IconButton(
           tooltip: 'Ajouter une tâche',
@@ -26,30 +27,42 @@ class ChoresScreen extends ConsumerWidget {
           onPressed: () => context.push(RoommatesRoutes.newChore),
         ),
       ],
-      body: ListView(
-        padding: const EdgeInsets.all(AppSpacing.md),
-        children: [
-          const AppSectionHeader(title: 'Tâches en attente'),
-          if (pending.isEmpty)
-            const AppCard(
-              padding: EdgeInsets.all(AppSpacing.lg),
-              child: Center(child: Text('L\'appartement est parfaitement propre ! ✨')),
-            )
-          else
-            for (final c in pending) ...[
-              _ChoreTile(chore: c),
-              AppSpacing.gapSm,
-            ],
-          AppSpacing.gapLg,
+      body: AppAsyncView(
+        value: choresAsync,
+        isEmpty: (items) => items.isEmpty,
+        empty: AppEmptyState(
+          icon: Icons.cleaning_services_outlined,
+          title: 'Aucune tâche ménagère',
+          message: 'Planifiez les tâches communes de la colocation.',
+          actionLabel: 'Nouvelle tâche',
+          onAction: () => context.push(RoommatesRoutes.newChore),
+        ),
+        onRetry: () => ref.read(choresAsyncProvider.notifier).refresh(),
+        data: (_) => ListView(
+          padding: const EdgeInsets.all(AppSpacing.md),
+          children: [
+            const AppSectionHeader(title: 'Tâches en attente'),
+            if (pending.isEmpty)
+              const AppCard(
+                padding: EdgeInsets.all(AppSpacing.lg),
+                child: Center(child: Text('L\'appartement est parfaitement propre ! ✨')),
+              )
+            else
+              for (final c in pending) ...[
+                _ChoreTile(chore: c),
+                AppSpacing.gapSm,
+              ],
+            AppSpacing.gapLg,
 
-          if (completed.isNotEmpty) ...[
-            const AppSectionHeader(title: 'Historique des tâches faites'),
-            for (final c in completed) ...[
-              _ChoreTile(chore: c),
-              AppSpacing.gapSm,
+            if (completed.isNotEmpty) ...[
+              const AppSectionHeader(title: 'Historique des tâches faites'),
+              for (final c in completed) ...[
+                _ChoreTile(chore: c),
+                AppSpacing.gapSm,
+              ],
             ],
           ],
-        ],
+        ),
       ),
     );
   }
@@ -65,12 +78,23 @@ class _ChoreTile extends ConsumerWidget {
       children: [
         Checkbox(
           value: chore.isCompleted,
-          onChanged: (_) {
-            ref.read(choresProvider.notifier).toggle(chore.id);
-            AppSnackbar.info(
-              context,
-              chore.isCompleted ? 'Tâche remise en cours' : 'Tâche validée avec succès !',
-            );
+          onChanged: (_) async {
+            try {
+              await ref.read(choresAsyncProvider.notifier).toggle(chore.id);
+              if (context.mounted) {
+                AppSnackbar.info(
+                  context,
+                  chore.isCompleted ? 'Tâche remise en cours' : 'Tâche validée avec succès !',
+                );
+              }
+            } catch (e) {
+              if (context.mounted) {
+                AppSnackbar.error(
+                  context,
+                  e is ApiException ? e.message : 'Erreur lors de la mise à jour.',
+                );
+              }
+            }
           },
         ),
         AppSpacing.gapSm,
@@ -91,7 +115,9 @@ class _ChoreTile extends ConsumerWidget {
                   AppSpacing.gapXs,
                   Text(
                     chore.assignedToName,
-                    style: context.text.labelSmall?.copyWith(color: context.colors.textSecondary),
+                    style: context.text.labelSmall?.copyWith(
+                      color: context.colors.textSecondary,
+                    ),
                   ),
                   const Spacer(),
                   AppBadge(
@@ -105,7 +131,18 @@ class _ChoreTile extends ConsumerWidget {
         ),
         IconButton(
           icon: const Icon(Icons.delete_outline_rounded, size: 20),
-          onPressed: () => ref.read(choresProvider.notifier).delete(chore.id),
+          onPressed: () async {
+            try {
+              await ref.read(choresAsyncProvider.notifier).delete(chore.id);
+            } catch (e) {
+              if (context.mounted) {
+                AppSnackbar.error(
+                  context,
+                  e is ApiException ? e.message : 'Impossible de supprimer la tâche.',
+                );
+              }
+            }
+          },
         ),
       ],
     ),

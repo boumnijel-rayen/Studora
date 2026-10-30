@@ -2,14 +2,45 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/core.dart';
+import '../models/roommate_models.dart';
 import '../providers/roommates_providers.dart';
 
-class BalancesScreen extends ConsumerWidget {
+class BalancesScreen extends ConsumerStatefulWidget {
   const BalancesScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<BalancesScreen> createState() => _BalancesScreenState();
+}
+
+class _BalancesScreenState extends ConsumerState<BalancesScreen> {
+  String? _settlingKey;
+
+  Future<void> _settle(BalanceDue b) async {
+    final key = '${b.fromPerson}->${b.toPerson}:${b.amount}';
+    setState(() => _settlingKey = key);
+    try {
+      await ref.read(expensesAsyncProvider.notifier).settle(b);
+      if (!mounted) return;
+      final currency = ref.read(preferencesProvider).currency;
+      AppSnackbar.success(
+        context,
+        'Remboursement de ${Formatters.money(b.amount, symbol: currency)} enregistré !',
+      );
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      AppSnackbar.error(context, e.message);
+    } catch (_) {
+      if (!mounted) return;
+      AppSnackbar.error(context, 'Impossible d\'enregistrer le remboursement.');
+    } finally {
+      if (mounted) setState(() => _settlingKey = null);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final balances = ref.watch(balancesDueProvider);
+    final currency = ref.watch(preferencesProvider).currency;
 
     return AppScaffold(
       title: 'Équilibre des soldes',
@@ -37,7 +68,11 @@ class BalancesScreen extends ConsumerWidget {
                     Expanded(
                       child: Text(
                         'Comptes simplifiés',
-                        style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18),
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 18,
+                        ),
                       ),
                     ),
                   ],
@@ -70,7 +105,6 @@ class BalancesScreen extends ConsumerWidget {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          // Titre « A → B » : revient à la ligne si les noms sont longs.
                           Text.rich(
                             TextSpan(
                               style: context.text.titleSmall,
@@ -102,7 +136,7 @@ class BalancesScreen extends ConsumerWidget {
                           FittedBox(
                             fit: BoxFit.scaleDown,
                             child: Text(
-                              Formatters.money(b.amount),
+                              Formatters.money(b.amount, symbol: currency),
                               style: context.text.titleMedium?.copyWith(
                                 fontWeight: FontWeight.bold,
                                 color: context.colors.primary,
@@ -114,12 +148,8 @@ class BalancesScreen extends ConsumerWidget {
                             label: 'Régler',
                             size: AppButtonSize.sm,
                             variant: AppButtonVariant.tonal,
-                            onPressed: () {
-                              AppSnackbar.success(
-                                context,
-                                'Remboursement de ${Formatters.money(b.amount)} validé !',
-                              );
-                            },
+                            isLoading: _settlingKey == '${b.fromPerson}->${b.toPerson}:${b.amount}',
+                            onPressed: () => _settle(b),
                           ),
                         ],
                       ),

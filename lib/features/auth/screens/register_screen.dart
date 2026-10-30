@@ -16,6 +16,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
   final _formKey = GlobalKey<FormState>();
   int _step = 1;
   bool _isLoading = false;
+  String? _errorMessage;
 
   // Étape 1 : Identité
   final _firstNameCtrl = TextEditingController();
@@ -24,9 +25,9 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
   final _phoneCtrl = TextEditingController();
 
   // Étape 2 : Cursus & Sécurité
-  final _universityCtrl = TextEditingController(text: 'Université Paris-Saclay');
+  final _universityCtrl = TextEditingController();
   final _programCtrl = TextEditingController();
-  int _year = 3;
+  int _year = 1;
   final _passCtrl = TextEditingController();
   final _confirmPassCtrl = TextEditingController();
 
@@ -44,6 +45,8 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
   }
 
   Future<void> _submit() async {
+    if (_isLoading) return;
+    setState(() => _errorMessage = null);
     if (!_formKey.currentState!.validate()) return;
 
     if (_step == 1) {
@@ -52,24 +55,37 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
     }
 
     setState(() => _isLoading = true);
-    await Future<void>.delayed(const Duration(milliseconds: 700));
-    if (!mounted) return;
+    try {
+      final newUser = await ref.read(sessionProvider.notifier).register(
+        firstName: _firstNameCtrl.text.trim(),
+        lastName: _lastNameCtrl.text.trim(),
+        email: _emailCtrl.text.trim(),
+        phone: _phoneCtrl.text.trim(),
+        university: _universityCtrl.text.trim(),
+        program: _programCtrl.text.trim(),
+        year: _year,
+        password: _passCtrl.text,
+      );
 
-    final newUser = AppUser(
-      id: 'u-${DateTime.now().millisecondsSinceEpoch}',
-      firstName: _firstNameCtrl.text.trim(),
-      lastName: _lastNameCtrl.text.trim(),
-      email: _emailCtrl.text.trim(),
-      phone: _phoneCtrl.text.trim(),
-      university: _universityCtrl.text.trim(),
-      program: _programCtrl.text.trim(),
-      year: _year,
-      bio: 'Nouvel étudiant sur Studora',
-    );
-
-    ref.read(sessionProvider.notifier).signIn(newUser);
-    AppSnackbar.success(context, 'Compte créé avec succès ! Bienvenue ${newUser.firstName} 🎉');
-    context.go('/home');
+      if (!mounted) return;
+      AppSnackbar.success(context, 'Compte créé avec succès ! Bienvenue ${newUser.firstName} 🎉');
+      context.go('/home');
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _isLoading = false;
+        _errorMessage = e.message;
+      });
+      AppSnackbar.error(context, e.message);
+    } catch (e) {
+      if (!mounted) return;
+      final err = ApiException.fromError(e);
+      setState(() {
+        _isLoading = false;
+        _errorMessage = err.message;
+      });
+      AppSnackbar.error(context, err.message);
+    }
   }
 
   @override
@@ -112,6 +128,30 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                 ),
                 AppSpacing.gapLg,
 
+                if (_errorMessage != null) ...[
+                  Container(
+                    padding: const EdgeInsets.all(AppSpacing.sm),
+                    decoration: BoxDecoration(
+                      color: context.colors.error.withValues(alpha: 0.1),
+                      borderRadius: AppRadius.brMd,
+                      border: Border.all(color: context.colors.error.withValues(alpha: 0.4)),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(Icons.error_outline_rounded, color: context.colors.error, size: 20),
+                        AppSpacing.gapXs,
+                        Expanded(
+                          child: Text(
+                            _errorMessage!,
+                            style: context.text.bodySmall?.copyWith(color: context.colors.error),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  AppSpacing.gapMd,
+                ],
+
                 if (_step == 1) ...[
                   Text('Informations personnelles', style: context.text.titleLarge),
                   AppSpacing.gapXxs,
@@ -126,7 +166,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                         child: AppTextField(
                           controller: _firstNameCtrl,
                           label: 'Prénom',
-                          hint: 'ex: Rayen',
+                          hint: 'ex: Camille',
                           validator: Validators.required(),
                         ),
                       ),
@@ -135,7 +175,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                         child: AppTextField(
                           controller: _lastNameCtrl,
                           label: 'Nom',
-                          hint: 'ex: Ben Ali',
+                          hint: 'ex: Martin',
                           validator: Validators.required(),
                         ),
                       ),

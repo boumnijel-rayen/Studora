@@ -1,0 +1,60 @@
+{
+  "kind": "collectionType",
+  "collectionName": "deadlines",
+  "info": {
+    "singularName": "deadline",
+    "pluralName": "deadlines",
+    "displayName": "Deadline",
+    "description": "Examen, devoir ou projet avec date limite et rappel"
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "attributes": {
+    "title": {
+      "type": "string",
+      "required": true
+    },
+    "subject": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::subject.subject"
+    },
+    "subjectName": {
+      "type": "string",
+      "required": true
+    },
+    "dueDate": {
+      "type": "datetime",
+      "required": true
+    },
+    "type": {
+      "type": "enumeration",
+      "enum": ["exam", "homework", "project"],
+      "default": "homework"
+    },
+    "priority": {
+      "type": "enumeration",
+      "enum": ["high", "medium", "low"],
+      "default": "medium"
+    },
+    "isCompleted": {
+      "type": "boolean",
+      "default": false
+    },
+    "description": {
+      "type": "text",
+      "default": ""
+    },
+    "reminderBeforeMinutes": {
+      "type": "integer",
+      "default": 30
+    },
+    "owner": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "plugin::users-permissions.user"
+    }
+  }
+}
+

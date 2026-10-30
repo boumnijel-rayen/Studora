@@ -1,0 +1,46 @@
+{
+  "kind": "collectionType",
+  "collectionName": "subjects",
+  "info": {
+    "singularName": "subject",
+    "pluralName": "subjects",
+    "displayName": "Subject",
+    "description": "Matière suivie par un étudiant"
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "attributes": {
+    "name": {
+      "type": "string",
+      "required": true
+    },
+    "shortName": {
+      "type": "string",
+      "required": true
+    },
+    "colorIndex": {
+      "type": "integer",
+      "default": 0,
+      "min": 0
+    },
+    "iconKey": {
+      "type": "string",
+      "default": "book"
+    },
+    "coefficient": {
+      "type": "decimal",
+      "default": 1.0
+    },
+    "teacher": {
+      "type": "string",
+      "default": ""
+    },
+    "owner": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "plugin::users-permissions.user"
+    }
+  }
+}
+

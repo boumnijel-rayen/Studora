@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/core.dart';
+import '../../grades/providers/grades_providers.dart';
 import '../auth_routes.dart';
 
 class ProfileScreen extends ConsumerWidget {
@@ -10,7 +11,23 @@ class ProfileScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final user = ref.watch(currentUserProvider) ?? MockSharedData.demoUser;
+    final user = ref.watch(currentUserProvider);
+    final subjectsAsync = ref.watch(subjectsAsyncProvider);
+    final overallAvg = ref.watch(overallAverageProvider);
+    final grades = ref.watch(gradesProvider);
+
+    if (user == null) {
+      return AppScaffold(
+        title: 'Mon Profil',
+        body: AppErrorState(
+          title: 'Session expirée',
+          message: 'Veuillez vous connecter pour consulter votre profil.',
+          onRetry: () => context.go(AuthRoutes.login),
+        ),
+      );
+    }
+
+    final subjectsCount = subjectsAsync.asData?.value.length ?? 0;
 
     return AppScaffold(
       title: 'Mon Profil',
@@ -39,7 +56,9 @@ class ProfileScreen extends ConsumerWidget {
                 Text(user.fullName, style: context.text.headlineSmall),
                 AppSpacing.gapXxs,
                 SubjectChip(
-                  label: '${user.university} • Année ${user.year}',
+                  label: user.university.isNotEmpty
+                      ? '${user.university} • Année ${user.year}'
+                      : 'Année ${user.year}',
                   color: context.colors.primary,
                 ),
                 if (user.bio.isNotEmpty) ...[
@@ -75,13 +94,13 @@ class ProfileScreen extends ConsumerWidget {
                 const Divider(),
                 AppListTile(
                   title: 'Filière / Spécialité',
-                  subtitle: user.program,
+                  subtitle: user.program.isNotEmpty ? user.program : 'Non renseignée',
                   leading: const Icon(Icons.school_outlined),
                 ),
                 const Divider(),
                 AppListTile(
                   title: 'Établissement',
-                  subtitle: user.university,
+                  subtitle: user.university.isNotEmpty ? user.university : 'Non renseigné',
                   leading: const Icon(Icons.account_balance_outlined),
                 ),
               ],
@@ -89,23 +108,24 @@ class ProfileScreen extends ConsumerWidget {
           ),
           AppSpacing.gapLg,
 
-          // Résumé académique
+          // Résumé académique alimenté par le backend
           const AppSectionHeader(title: 'Aperçu Académique'),
           Row(
             children: [
               Expanded(
                 child: AppStatCard(
                   label: 'Matières suivies',
-                  value: '${MockSharedData.subjects.length}',
+                  value: '$subjectsCount',
                   icon: Icons.menu_book_rounded,
                   color: AppColors.moduleSchedule,
+                  onTap: () => showCreateSubjectSheet(context, ref),
                 ),
               ),
               AppSpacing.gapSm,
               Expanded(
                 child: AppStatCard(
                   label: 'Moyenne générale',
-                  value: '14.2 / 20',
+                  value: grades.isEmpty ? '— / 20' : '${overallAvg.toStringAsFixed(2)} / 20',
                   icon: Icons.insights_rounded,
                   color: AppColors.moduleGrades,
                   onTap: () => context.go('/grades'),

@@ -1,0 +1,60 @@
+{
+  "kind": "collectionType",
+  "collectionName": "study_groups",
+  "info": {
+    "singularName": "study-group",
+    "pluralName": "study-groups",
+    "displayName": "Study Group",
+    "description": "Groupe d'étude collaboratif avec code d'invitation et membres"
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "attributes": {
+    "name": {
+      "type": "string",
+      "required": true
+    },
+    "description": {
+      "type": "text",
+      "default": ""
+    },
+    "subject": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::subject.subject"
+    },
+    "subjectId": {
+      "type": "string",
+      "required": true
+    },
+    "subjectName": {
+      "type": "string",
+      "required": true
+    },
+    "code": {
+      "type": "string",
+      "required": true,
+      "unique": true
+    },
+    "colorIndex": {
+      "type": "integer",
+      "default": 6
+    },
+    "memberNames": {
+      "type": "json",
+      "default": []
+    },
+    "creator": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "plugin::users-permissions.user"
+    },
+    "members": {
+      "type": "relation",
+      "relation": "manyToMany",
+      "target": "plugin::users-permissions.user"
+    }
+  }
+}
+

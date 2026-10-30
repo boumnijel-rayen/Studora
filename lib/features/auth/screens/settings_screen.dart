@@ -10,6 +10,8 @@ class SettingsScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final prefs = ref.watch(preferencesProvider);
     final notifier = ref.read(preferencesProvider.notifier);
+    final globalSettingsAsync = ref.watch(globalAppSettingsProvider);
+    final globalSettings = globalSettingsAsync.asData?.value ?? const GlobalAppSettings();
 
     return AppScaffold(
       title: 'Préférences',
@@ -39,7 +41,7 @@ class SettingsScreen extends ConsumerWidget {
             child: Column(
               children: [
                 AppSwitchTile(
-                  title: 'Notifications push simulées',
+                  title: 'Notifications et rappels',
                   subtitle: 'Recevoir les alertes d\'échéances et de cours',
                   icon: Icons.notifications_active_outlined,
                   value: prefs.notificationsEnabled,
@@ -86,12 +88,11 @@ class SettingsScreen extends ConsumerWidget {
             padding: const EdgeInsets.symmetric(vertical: AppSpacing.xs),
             child: Column(
               children: [
-                AppListTile(
+                const AppListTile(
                   title: 'Langue de l\'application',
                   subtitle: 'Français (France)',
-                  leading: const Icon(Icons.language_rounded),
-                  trailing: const Icon(Icons.check_rounded, color: AppColors.primary),
-                  onTap: () => AppSnackbar.info(context, 'Langue fixée en Français'),
+                  leading: Icon(Icons.language_rounded),
+                  trailing: Icon(Icons.check_rounded, color: AppColors.primary),
                 ),
                 const Divider(),
                 Padding(
@@ -129,7 +130,7 @@ class SettingsScreen extends ConsumerWidget {
           ),
           AppSpacing.gapLg,
 
-          const AppSectionHeader(title: 'À propos'),
+          const AppSectionHeader(title: 'À propos (Paramètres globaux)'),
           AppCard(
             padding: const EdgeInsets.all(AppSpacing.md),
             child: Row(
@@ -140,8 +141,8 @@ class SettingsScreen extends ConsumerWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text('Studora v0.1.0', style: context.text.titleSmall),
-                      Text('Projet universitaire Frontend Flutter', style: context.text.bodySmall),
+                      Text('${globalSettings.appName} v${globalSettings.appVersion}', style: context.text.titleSmall),
+                      Text('Support : ${globalSettings.supportEmail}', style: context.text.bodySmall),
                     ],
                   ),
                 ),

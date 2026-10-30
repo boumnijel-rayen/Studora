@@ -17,7 +17,8 @@ class _AddRoommateScreenState extends ConsumerState<AddRoommateScreen> {
   final _nameCtrl = TextEditingController();
   final _phoneCtrl = TextEditingController();
   final _emailCtrl = TextEditingController();
-  final _roomCtrl = TextEditingController(text: 'Chambre 4');
+  final _roomCtrl = TextEditingController(text: 'Chambre 1');
+  bool _saving = false;
 
   @override
   void dispose() {
@@ -28,21 +29,33 @@ class _AddRoommateScreenState extends ConsumerState<AddRoommateScreen> {
     super.dispose();
   }
 
-  void _save() {
+  Future<void> _save() async {
     if (!_formKey.currentState!.validate()) return;
+    setState(() => _saving = true);
 
-    final newRoommate = Roommate(
-      id: 'rm-${DateTime.now().millisecondsSinceEpoch}',
-      name: _nameCtrl.text.trim(),
-      phone: _phoneCtrl.text.trim(),
-      email: _emailCtrl.text.trim(),
-      roomNumber: _roomCtrl.text.trim(),
-      isPresent: true,
-    );
+    try {
+      final newRoommate = Roommate(
+        id: '',
+        name: _nameCtrl.text.trim(),
+        phone: _phoneCtrl.text.trim(),
+        email: _emailCtrl.text.trim(),
+        roomNumber: _roomCtrl.text.trim(),
+        isPresent: true,
+      );
 
-    ref.read(roommatesProvider.notifier).add(newRoommate);
-    AppSnackbar.success(context, 'Colocataire ajouté !');
-    Navigator.pop(context);
+      await ref.read(roommatesAsyncProvider.notifier).add(newRoommate);
+      if (!mounted) return;
+      AppSnackbar.success(context, 'Colocataire ajouté !');
+      Navigator.pop(context);
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      AppSnackbar.error(context, e.message);
+    } catch (_) {
+      if (!mounted) return;
+      AppSnackbar.error(context, 'Impossible d\'ajouter ce colocataire.');
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
   }
 
   @override
@@ -81,13 +94,14 @@ class _AddRoommateScreenState extends ConsumerState<AddRoommateScreen> {
             AppTextField(
               controller: _roomCtrl,
               label: 'Identifiant / Nom de la chambre',
-              hint: 'ex: Chambre 4 (étage 1)',
+              hint: 'ex: Chambre 2 (étage 1)',
               validator: Validators.required(),
             ),
             AppSpacing.gapXl,
             AppButton(
               label: 'Ajouter à la colocation',
               icon: Icons.check_rounded,
+              isLoading: _saving,
               expand: true,
               onPressed: _save,
             ),

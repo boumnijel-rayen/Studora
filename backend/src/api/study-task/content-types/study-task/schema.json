@@ -1,0 +1,41 @@
+{
+  "kind": "collectionType",
+  "collectionName": "study_tasks",
+  "info": {
+    "singularName": "study-task",
+    "pluralName": "study-tasks",
+    "displayName": "Study Task",
+    "description": "Tâche d'étude associée à une matière et à un utilisateur"
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "attributes": {
+    "title": {
+      "type": "string",
+      "required": true
+    },
+    "isCompleted": {
+      "type": "boolean",
+      "default": false
+    },
+    "dueDate": {
+      "type": "datetime"
+    },
+    "subject": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::subject.subject"
+    },
+    "subjectId": {
+      "type": "string",
+      "required": true
+    },
+    "owner": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "plugin::users-permissions.user"
+    }
+  }
+}
+

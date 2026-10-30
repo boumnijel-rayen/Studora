@@ -7,7 +7,8 @@ import 'package:go_router/go_router.dart';
 import '../../../core/core.dart';
 import '../auth_routes.dart';
 
-/// Splash : redirige vers l'onboarding, la connexion ou l'accueil.
+/// Splash : restaure la session JWT auprès de Strapi, puis redirige vers
+/// l'accueil, la connexion ou l'onboarding.
 class SplashScreen extends ConsumerStatefulWidget {
   const SplashScreen({super.key});
 
@@ -21,12 +22,21 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
   @override
   void initState() {
     super.initState();
-    _timer = Timer(const Duration(milliseconds: 1400), () {
-      if (!mounted) return;
-      final seen = ref.read(onboardingSeenProvider);
-      final user = ref.read(sessionProvider);
-      context.go(user != null ? '/home' : (seen ? AuthRoutes.login : AuthRoutes.onboarding));
-    });
+    _bootstrap();
+  }
+
+  Future<void> _bootstrap() async {
+    final minDelay = Future<void>.delayed(const Duration(milliseconds: 900));
+    try {
+      await ref.read(sessionProvider.notifier).restoreSession();
+    } catch (_) {
+      // Si hors-ligne au démarrage, redirige vers login
+    }
+    await minDelay;
+    if (!mounted) return;
+    final seen = ref.read(onboardingSeenProvider);
+    final user = ref.read(sessionProvider);
+    context.go(user != null ? '/home' : (seen ? AuthRoutes.login : AuthRoutes.onboarding));
   }
 
   @override

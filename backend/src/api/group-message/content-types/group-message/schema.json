@@ -1,0 +1,42 @@
+{
+  "kind": "collectionType",
+  "collectionName": "group_messages",
+  "info": {
+    "singularName": "group-message",
+    "pluralName": "group-messages",
+    "displayName": "Group Message",
+    "description": "Message envoyé dans la discussion d'un groupe d'étude"
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "attributes": {
+    "text": {
+      "type": "text",
+      "required": true
+    },
+    "senderName": {
+      "type": "string",
+      "required": true
+    },
+    "timestamp": {
+      "type": "datetime",
+      "required": true
+    },
+    "groupId": {
+      "type": "string",
+      "required": true
+    },
+    "group": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::study-group.study-group"
+    },
+    "sender": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "plugin::users-permissions.user"
+    }
+  }
+}
+

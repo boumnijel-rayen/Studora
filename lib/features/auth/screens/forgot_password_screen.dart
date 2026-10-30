@@ -1,21 +1,23 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/core.dart';
 import '../auth_routes.dart';
 
-class ForgotPasswordScreen extends StatefulWidget {
+class ForgotPasswordScreen extends ConsumerStatefulWidget {
   const ForgotPasswordScreen({super.key});
 
   @override
-  State<ForgotPasswordScreen> createState() => _ForgotPasswordScreenState();
+  ConsumerState<ForgotPasswordScreen> createState() => _ForgotPasswordScreenState();
 }
 
-class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
+class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
   final _formKey = GlobalKey<FormState>();
   final _emailCtrl = TextEditingController();
   bool _sent = false;
   bool _isLoading = false;
+  String? _errorMessage;
 
   @override
   void dispose() {
@@ -24,14 +26,34 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
   }
 
   Future<void> _submit() async {
+    if (_isLoading) return;
+    setState(() => _errorMessage = null);
     if (!_formKey.currentState!.validate()) return;
+
     setState(() => _isLoading = true);
-    await Future<void>.delayed(const Duration(milliseconds: 600));
-    if (!mounted) return;
-    setState(() {
-      _isLoading = false;
-      _sent = true;
-    });
+    try {
+      await ref.read(sessionProvider.notifier).requestPasswordReset(_emailCtrl.text);
+      if (!mounted) return;
+      setState(() {
+        _isLoading = false;
+        _sent = true;
+      });
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _isLoading = false;
+        _errorMessage = e.message;
+      });
+      AppSnackbar.error(context, e.message);
+    } catch (e) {
+      if (!mounted) return;
+      final err = ApiException.fromError(e);
+      setState(() {
+        _isLoading = false;
+        _errorMessage = err.message;
+      });
+      AppSnackbar.error(context, err.message);
+    }
   }
 
   @override
@@ -83,6 +105,13 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                         style: context.text.bodyMedium?.copyWith(color: context.colors.textSecondary),
                       ),
                       AppSpacing.gapXl,
+                      if (_errorMessage != null) ...[
+                        Text(
+                          _errorMessage!,
+                          style: context.text.bodySmall?.copyWith(color: context.colors.error),
+                        ),
+                        AppSpacing.gapMd,
+                      ],
                       AppTextField(
                         controller: _emailCtrl,
                         label: 'Adresse e-mail universitaire',

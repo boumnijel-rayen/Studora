@@ -31,7 +31,10 @@ class MoreScreen extends ConsumerWidget {
             onTap: () => context.push('/profile'),
             child: Row(
               children: [
-                AppAvatar(name: user?.fullName ?? 'Étudiant', size: AppSizes.avatarLg),
+                AppAvatar(
+                  name: user?.fullName ?? 'Étudiant',
+                  size: AppSizes.avatarLg,
+                ),
                 AppSpacing.gapMd,
                 Expanded(
                   child: Column(
@@ -40,9 +43,7 @@ class MoreScreen extends ConsumerWidget {
                       Text(user?.fullName ?? 'Invité', style: context.text.titleMedium),
                       const SizedBox(height: 2),
                       Text(
-                        user?.program.isNotEmpty == true
-                            ? user!.program
-                            : 'Étudiant Studora',
+                        user?.program.isNotEmpty == true ? user!.program : 'Étudiant Studora',
                         style: context.text.bodySmall,
                       ),
                     ],
@@ -95,7 +96,10 @@ class MoreScreen extends ConsumerWidget {
                     children: [
                       Text('Galerie du Design System', style: context.text.titleSmall),
                       const SizedBox(height: 2),
-                      Text('Vitrine des composants, tokens et variantes', style: context.text.bodySmall),
+                      Text(
+                        'Vitrine des composants, tokens et variantes',
+                        style: context.text.bodySmall,
+                      ),
                     ],
                   ),
                 ),
@@ -112,7 +116,9 @@ class MoreScreen extends ConsumerWidget {
               children: [
                 AppSwitchTile(
                   title: 'Mode sombre',
-                  icon: prefs.themeMode == ThemeMode.dark ? Icons.dark_mode_rounded : Icons.light_mode_rounded,
+                  icon: prefs.themeMode == ThemeMode.dark
+                      ? Icons.dark_mode_rounded
+                      : Icons.light_mode_rounded,
                   value: prefs.themeMode == ThemeMode.dark,
                   onChanged: (isDark) {
                     ref.read(preferencesProvider.notifier).setThemeMode(
@@ -133,8 +139,10 @@ class MoreScreen extends ConsumerWidget {
                       destructive: true,
                     );
                     if (confirm && context.mounted) {
-                      ref.read(sessionProvider.notifier).signOut();
-                      context.go('/auth/login');
+                      await ref.read(sessionProvider.notifier).signOut();
+                      if (context.mounted) {
+                        context.go('/auth/login');
+                      }
                     }
                   },
                 ),

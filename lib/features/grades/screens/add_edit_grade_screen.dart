@@ -19,6 +19,7 @@ class _AddEditGradeScreenState extends ConsumerState<AddEditGradeScreen> {
   final _coeffCtrl = TextEditingController(text: '1.0');
   String? _selectedSubjectId;
   DateTime _date = DateTime.now();
+  bool _isSaving = false;
 
   @override
   void dispose() {
@@ -28,20 +29,25 @@ class _AddEditGradeScreenState extends ConsumerState<AddEditGradeScreen> {
     super.dispose();
   }
 
-  void _save() {
+  Future<void> _save() async {
+    if (_isSaving) return;
+    final subjects = ref.read(subjectsProvider);
     if (!_formKey.currentState!.validate() || _selectedSubjectId == null) {
       if (_selectedSubjectId == null) {
-        AppSnackbar.error(context, 'Veuillez choisir une matière');
+        AppSnackbar.error(context, 'Veuillez choisir ou créer une matière');
       }
       return;
     }
 
     final val = double.tryParse(_valueCtrl.text.replaceAll(',', '.').trim()) ?? 0.0;
     final coeff = double.tryParse(_coeffCtrl.text.replaceAll(',', '.').trim()) ?? 1.0;
-    final subject = MockSharedData.subjects.firstWhere((s) => s.id == _selectedSubjectId);
+    final subject = subjects.where((s) => s.id == _selectedSubjectId).firstOrNull;
+    if (subject == null) return;
+
+    setState(() => _isSaving = true);
 
     final grade = Grade(
-      id: 'gr-${DateTime.now().millisecondsSinceEpoch}',
+      id: '',
       subjectId: subject.id,
       subjectName: subject.name,
       title: _titleCtrl.text.trim(),
@@ -50,14 +56,22 @@ class _AddEditGradeScreenState extends ConsumerState<AddEditGradeScreen> {
       date: _date,
     );
 
-    ref.read(gradesProvider.notifier).add(grade);
-    AppSnackbar.success(context, 'Note de ${val.toStringAsFixed(1)}/20 enregistrée !');
-    Navigator.pop(context);
+    try {
+      await ref.read(gradesAsyncProvider.notifier).add(grade);
+      if (!mounted) return;
+      AppSnackbar.success(context, 'Note de ${val.toStringAsFixed(1)}/20 enregistrée !');
+      Navigator.pop(context);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _isSaving = false);
+      AppSnackbar.error(context, ApiException.fromError(e).message);
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    const subjects = MockSharedData.subjects;
+    final subjects = ref.watch(subjectsProvider);
+    final validSubjectId = subjects.any((s) => s.id == _selectedSubjectId) ? _selectedSubjectId : null;
 
     return AppScaffold(
       title: 'Ajouter une note',
@@ -68,13 +82,31 @@ class _AddEditGradeScreenState extends ConsumerState<AddEditGradeScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              AppDropdownField<String>(
-                label: 'Matière',
-                value: _selectedSubjectId,
-                hint: 'Sélectionner la matière',
-                items: subjects.map((s) => s.id).toList(),
-                itemLabel: (id) => subjects.firstWhere((s) => s.id == id).name,
-                onChanged: (v) => setState(() => _selectedSubjectId = v),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Expanded(
+                    child: AppDropdownField<String>(
+                      label: 'Matière',
+                      value: validSubjectId,
+                      hint: subjects.isEmpty ? 'Créez d\'abord une matière →' : 'Sélectionner la matière',
+                      items: subjects.map((s) => s.id).toList(),
+                      itemLabel: (id) => subjects.firstWhere((s) => s.id == id).name,
+                      onChanged: (v) => setState(() => _selectedSubjectId = v),
+                    ),
+                  ),
+                  AppSpacing.gapXs,
+                  IconButton.filledTonal(
+                    tooltip: 'Nouvelle matière',
+                    icon: const Icon(Icons.add_rounded),
+                    onPressed: () async {
+                      final created = await showCreateSubjectSheet(context, ref);
+                      if (created != null && mounted) {
+                        setState(() => _selectedSubjectId = created.id);
+                      }
+                    },
+                  ),
+                ],
               ),
               AppSpacing.gapMd,
               AppTextField(
@@ -123,6 +155,7 @@ class _AddEditGradeScreenState extends ConsumerState<AddEditGradeScreen> {
               AppButton(
                 label: 'Enregistrer la note',
                 icon: Icons.check_rounded,
+                isLoading: _isSaving,
                 expand: true,
                 onPressed: _save,
               ),

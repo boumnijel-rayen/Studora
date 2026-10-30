@@ -16,6 +16,7 @@ class GroupChatScreen extends ConsumerStatefulWidget {
 class _GroupChatScreenState extends ConsumerState<GroupChatScreen> {
   final _textCtrl = TextEditingController();
   final _scrollCtrl = ScrollController();
+  bool _sending = false;
 
   @override
   void dispose() {
@@ -24,26 +25,35 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen> {
     super.dispose();
   }
 
-  void _sendMessage() {
+  Future<void> _sendMessage() async {
+    if (_sending) return;
     final text = _textCtrl.text.trim();
     if (text.isEmpty) return;
 
-    final user = ref.read(currentUserProvider) ?? MockSharedData.demoUser;
-    ref.read(groupMessagesProvider.notifier).sendMessage(widget.groupId, text, user.fullName);
-    _textCtrl.clear();
+    final user = ref.read(currentUserProvider);
+    if (user == null) {
+      AppSnackbar.error(context, 'Session expirée. Veuillez vous reconnecter.');
+      return;
+    }
 
-    _scrollToBottom();
-
-    // Simulation d'une réponse dynamique d'un camarade de promo après 1.2s
-    Future<void>.delayed(const Duration(milliseconds: 1200), () {
-      if (!mounted) return;
-      ref.read(groupMessagesProvider.notifier).addIncomingMessage(
-        widget.groupId,
-        'Alice Dubois',
-        'Top, bien noté ! J\'amènerai aussi les exercices corrigés de l\'an dernier.',
+    setState(() => _sending = true);
+    try {
+      await ref.read(groupChatServiceProvider).sendMessage(
+        groupId: widget.groupId,
+        text: text,
+        senderName: user.fullName,
       );
+      _textCtrl.clear();
       _scrollToBottom();
-    });
+    } catch (e) {
+      if (mounted) {
+        AppSnackbar.error(context, ApiException.fromError(e).message);
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _sending = false);
+      }
+    }
   }
 
   void _scrollToBottom() {
@@ -62,25 +72,38 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen> {
   Widget build(BuildContext context) {
     final allGroups = ref.watch(groupsProvider);
     final group = allGroups.where((g) => g.id == widget.groupId).firstOrNull;
-    final messagesMap = ref.watch(groupMessagesProvider);
-    final messages = messagesMap[widget.groupId] ?? [];
+    final messagesAsync = ref.watch(groupMessagesFamilyProvider(widget.groupId));
 
     return AppScaffold(
       title: group?.name ?? 'Discussion de groupe',
       subtitle: '${group?.memberNames.length ?? 0} membres',
+      actions: [
+        IconButton(
+          tooltip: 'Actualiser les messages',
+          icon: const Icon(Icons.refresh_rounded),
+          onPressed: () => ref.invalidate(groupMessagesFamilyProvider(widget.groupId)),
+        ),
+      ],
       body: Column(
         children: [
-          // Liste des bulles de messages
+          // Liste des bulles de messages depuis Strapi
           Expanded(
-            child: ListView.separated(
-              controller: _scrollCtrl,
-              padding: const EdgeInsets.all(AppSpacing.md),
-              itemCount: messages.length,
-              separatorBuilder: (_, _) => AppSpacing.gapSm,
-              itemBuilder: (context, i) {
-                final m = messages[i];
-                return _ChatBubble(message: m);
-              },
+            child: AppAsyncView<List<GroupMessage>>(
+              value: messagesAsync,
+              isEmpty: (list) => list.isEmpty,
+              empty: const AppEmptyState(
+                icon: Icons.chat_bubble_outline_rounded,
+                title: 'Aucun message',
+                message: 'Envoyez le premier message pour lancer la discussion du groupe !',
+              ),
+              onRetry: () => ref.invalidate(groupMessagesFamilyProvider(widget.groupId)),
+              data: (messages) => ListView.separated(
+                controller: _scrollCtrl,
+                padding: const EdgeInsets.all(AppSpacing.md),
+                itemCount: messages.length,
+                separatorBuilder: (_, _) => AppSpacing.gapSm,
+                itemBuilder: (context, i) => _ChatBubble(message: messages[i]),
+              ),
             ),
           ),
 
@@ -103,8 +126,13 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen> {
                   ),
                   AppSpacing.gapSm,
                   IconButton.filled(
-                    onPressed: _sendMessage,
-                    icon: const Icon(Icons.send_rounded),
+                    onPressed: _sending ? null : _sendMessage,
+                    icon: _sending
+                        ? const SizedBox.square(
+                            dimension: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                          )
+                        : const Icon(Icons.send_rounded),
                   ),
                 ],
               ),

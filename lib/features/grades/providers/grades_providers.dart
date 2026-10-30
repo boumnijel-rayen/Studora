@@ -1,108 +1,84 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/core.dart';
 import '../models/grade_models.dart';
 
-final _initialGrades = [
-  Grade(
-    id: 'gr-1',
-    subjectId: 's-math',
-    subjectName: 'Mathématiques',
-    title: 'Contrôle continu 1',
-    value: 13.5,
-    coefficient: 1.0,
-    date: DateTime.now().subtract(const Duration(days: 20)),
-  ),
-  Grade(
-    id: 'gr-2',
-    subjectId: 's-math',
-    subjectName: 'Mathématiques',
-    title: 'Devoir surveillé',
-    value: 15.0,
-    coefficient: 2.0,
-    date: DateTime.now().subtract(const Duration(days: 5)),
-  ),
-  Grade(
-    id: 'gr-3',
-    subjectId: 's-algo',
-    subjectName: 'Algorithmique',
-    title: 'TP Noté Arbres & Graphes',
-    value: 16.5,
-    coefficient: 1.5,
-    date: DateTime.now().subtract(const Duration(days: 12)),
-  ),
-  Grade(
-    id: 'gr-4',
-    subjectId: 's-mobile',
-    subjectName: 'Développement mobile',
-    title: 'Projet Flutter Sprint 1',
-    value: 17.0,
-    coefficient: 2.0,
-    date: DateTime.now().subtract(const Duration(days: 8)),
-  ),
-  Grade(
-    id: 'gr-5',
-    subjectId: 's-bdd',
-    subjectName: 'Bases de données',
-    title: 'Interrogation SQL',
-    value: 12.0,
-    coefficient: 1.0,
-    date: DateTime.now().subtract(const Duration(days: 15)),
-  ),
-  Grade(
-    id: 'gr-6',
-    subjectId: 's-anglais',
-    subjectName: 'Anglais',
-    title: 'Présentation orale',
-    value: 14.0,
-    coefficient: 1.0,
-    date: DateTime.now().subtract(const Duration(days: 18)),
-  ),
-];
-
-final _initialGoals = [
-  const AcademicGoal(
-    id: 'goal-1',
-    title: 'Mention Bien au semestre',
-    targetAverage: 14.0,
-    subjectName: 'Moyenne Générale',
-  ),
-  const AcademicGoal(
-    id: 'goal-2',
-    title: 'Valider les Maths au-dessus de 14',
-    targetAverage: 14.5,
-    subjectName: 'Mathématiques',
-    subjectId: 's-math',
-  ),
-  const AcademicGoal(
-    id: 'goal-3',
-    title: 'Excellence en Dév Mobile',
-    targetAverage: 16.0,
-    subjectName: 'Développement mobile',
-    subjectId: 's-mobile',
-  ),
-];
-
-class GradesNotifier extends Notifier<List<Grade>> {
+/// Notes connectées à Strapi (`/api/grades`).
+class GradesAsyncNotifier extends AsyncNotifier<List<Grade>> {
   @override
-  List<Grade> build() => _initialGrades;
+  Future<List<Grade>> build() async {
+    final user = ref.watch(currentUserProvider);
+    if (user == null) return const [];
 
-  void add(Grade grade) => state = [grade, ...state];
+    final client = ref.read(strapiClientProvider);
+    final items = await client.getList(
+      '/grades',
+      queryParameters: {'sort': 'date:desc'},
+    );
+    return items.map(Grade.fromJson).toList();
+  }
 
-  void delete(String id) => state = state.where((g) => g.id != id).toList();
+  Future<Grade> add(Grade grade) async {
+    final client = ref.read(strapiClientProvider);
+    final response = await client.post('/grades', body: grade.toJson());
+    final created = Grade.fromJson(StrapiClient.unwrapMap(response));
+    final current = state.asData?.value ?? const <Grade>[];
+    state = AsyncData([created, ...current]);
+    return created;
+  }
+
+  Future<void> delete(String id) async {
+    final client = ref.read(strapiClientProvider);
+    await client.delete('/grades/$id');
+    final current = state.asData?.value ?? const <Grade>[];
+    state = AsyncData(current.where((g) => g.id != id).toList());
+  }
 }
 
-final gradesProvider = NotifierProvider<GradesNotifier, List<Grade>>(GradesNotifier.new);
+final gradesAsyncProvider =
+    AsyncNotifierProvider<GradesAsyncNotifier, List<Grade>>(GradesAsyncNotifier.new);
 
-class AcademicGoalsNotifier extends Notifier<List<AcademicGoal>> {
+final gradesProvider = Provider<List<Grade>>(
+  (ref) => ref.watch(gradesAsyncProvider).asData?.value ?? const [],
+);
+
+/// Objectifs académiques connectés à Strapi (`/api/academic-goals`).
+class AcademicGoalsAsyncNotifier extends AsyncNotifier<List<AcademicGoal>> {
   @override
-  List<AcademicGoal> build() => _initialGoals;
+  Future<List<AcademicGoal>> build() async {
+    final user = ref.watch(currentUserProvider);
+    if (user == null) return const [];
 
-  void add(AcademicGoal goal) => state = [...state, goal];
-  void delete(String id) => state = state.where((g) => g.id != id).toList();
+    final client = ref.read(strapiClientProvider);
+    final items = await client.getList('/academic-goals');
+    return items.map(AcademicGoal.fromJson).toList();
+  }
+
+  Future<AcademicGoal> add(AcademicGoal goal) async {
+    final client = ref.read(strapiClientProvider);
+    final response = await client.post('/academic-goals', body: goal.toJson());
+    final created = AcademicGoal.fromJson(StrapiClient.unwrapMap(response));
+    final current = state.asData?.value ?? const <AcademicGoal>[];
+    state = AsyncData([...current, created]);
+    return created;
+  }
+
+  Future<void> delete(String id) async {
+    final client = ref.read(strapiClientProvider);
+    await client.delete('/academic-goals/$id');
+    final current = state.asData?.value ?? const <AcademicGoal>[];
+    state = AsyncData(current.where((g) => g.id != id).toList());
+  }
 }
 
-final academicGoalsProvider =
-    NotifierProvider<AcademicGoalsNotifier, List<AcademicGoal>>(AcademicGoalsNotifier.new);
+final academicGoalsAsyncProvider =
+    AsyncNotifierProvider<AcademicGoalsAsyncNotifier, List<AcademicGoal>>(
+      AcademicGoalsAsyncNotifier.new,
+    );
+
+final academicGoalsProvider = Provider<List<AcademicGoal>>(
+  (ref) => ref.watch(academicGoalsAsyncProvider).asData?.value ?? const [],
+);
 
 /// Calcul automatique de la moyenne générale pondérée
 final overallAverageProvider = Provider<double>((ref) {

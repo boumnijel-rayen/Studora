@@ -1,0 +1,63 @@
+{
+  "kind": "collectionType",
+  "collectionName": "study_sessions",
+  "info": {
+    "singularName": "study-session",
+    "pluralName": "study-sessions",
+    "displayName": "Study Session",
+    "description": "Session de révision ou Pomodoro associée à une matière et optionnellement une tâche/échéance"
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "attributes": {
+    "subject": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::subject.subject"
+    },
+    "subjectId": {
+      "type": "string",
+      "required": true
+    },
+    "subjectName": {
+      "type": "string",
+      "required": true
+    },
+    "durationMinutes": {
+      "type": "integer",
+      "required": true,
+      "min": 1
+    },
+    "date": {
+      "type": "datetime",
+      "required": true
+    },
+    "colorIndex": {
+      "type": "integer",
+      "default": 0
+    },
+    "notes": {
+      "type": "text",
+      "default": ""
+    },
+    "isCompleted": {
+      "type": "boolean",
+      "default": false
+    },
+    "linkedDeadlineTitle": {
+      "type": "string"
+    },
+    "task": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::study-task.study-task"
+    },
+    "owner": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "plugin::users-permissions.user"
+    }
+  }
+}
+

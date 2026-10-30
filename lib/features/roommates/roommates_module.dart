@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/core.dart';
+import 'providers/roommates_providers.dart';
 import 'roommates_routes.dart';
 import 'screens/add_chore_screen.dart';
 import 'screens/add_expense_screen.dart';
@@ -79,23 +81,35 @@ class RoommatesModule extends FeatureModule {
   ];
 
   @override
-  Widget? buildDashboardCard(BuildContext context) => AppCard(
-    onTap: () => context.go(RoommatesRoutes.root),
-    child: Row(
-      children: [
-        const AppIconBox(icon: Icons.home_rounded, color: AppColors.moduleRoommates),
-        AppSpacing.gapSm,
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text('Colocation', style: context.text.titleSmall),
-              Text('1 tâche à faire aujourd\'hui • Solde +28,00 €', style: context.text.bodySmall),
-            ],
-          ),
+  Widget? buildDashboardCard(BuildContext context) => Consumer(
+    builder: (context, ref, _) {
+      final chores = ref.watch(choresProvider);
+      final pendingCount = chores.where((c) => !c.isCompleted).length;
+      final netBalance = ref.watch(netUserBalanceProvider);
+      final currency = ref.watch(preferencesProvider).currency;
+      final sign = netBalance >= 0 ? '+' : '';
+      return AppCard(
+        onTap: () => context.go(RoommatesRoutes.root),
+        child: Row(
+          children: [
+            const AppIconBox(icon: Icons.home_rounded, color: AppColors.moduleRoommates),
+            AppSpacing.gapSm,
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Colocation', style: context.text.titleSmall),
+                  Text(
+                    '$pendingCount tâche${pendingCount > 1 ? 's' : ''} en attente • Solde $sign${Formatters.money(netBalance, symbol: currency)}',
+                    style: context.text.bodySmall,
+                  ),
+                ],
+              ),
+            ),
+            const Icon(Icons.chevron_right_rounded),
+          ],
         ),
-        const Icon(Icons.chevron_right_rounded),
-      ],
-    ),
+      );
+    },
   );
 }

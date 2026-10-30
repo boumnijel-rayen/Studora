@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../network/api_exception.dart';
 import '../theme/app_palette.dart';
 import '../tokens/app_dimensions.dart';
 import 'app_button.dart';
@@ -169,17 +170,52 @@ class AppEmptyState extends StatelessWidget {
 }
 
 /// État d'erreur avec bouton « Réessayer ».
+///
+/// Adapte automatiquement l'icône, le titre et le message selon le type
+/// d'[ApiException] (réseau, serveur, accès non autorisé, validation).
 class AppErrorState extends StatelessWidget {
   const AppErrorState({
     super.key,
     this.title = 'Une erreur est survenue',
     this.message = 'Impossible de charger les données. Vérifiez votre connexion puis réessayez.',
+    this.error,
     this.onRetry,
   });
 
+  factory AppErrorState.fromError(
+    Object error, {
+    Key? key,
+    VoidCallback? onRetry,
+  }) {
+    final apiErr = ApiException.fromError(error);
+    return AppErrorState(
+      key: key,
+      title: apiErr.userTitle,
+      message: apiErr.message,
+      error: apiErr,
+      onRetry: onRetry,
+    );
+  }
+
   final String title;
   final String message;
+  final Object? error;
   final VoidCallback? onRetry;
+
+  IconData _resolveIcon() {
+    final err = error;
+    if (err is ApiException) {
+      return switch (err.kind) {
+        ApiErrorKind.network => Icons.cloud_off_rounded,
+        ApiErrorKind.unauthorized || ApiErrorKind.forbidden => Icons.lock_outline_rounded,
+        ApiErrorKind.server => Icons.dns_outlined,
+        ApiErrorKind.notFound => Icons.search_off_rounded,
+        ApiErrorKind.validation => Icons.warning_amber_rounded,
+        ApiErrorKind.unknown => Icons.error_outline_rounded,
+      };
+    }
+    return Icons.cloud_off_rounded;
+  }
 
   @override
   Widget build(BuildContext context) => Center(
@@ -188,7 +224,7 @@ class AppErrorState extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(Icons.cloud_off_rounded, size: 56, color: context.colors.error),
+          Icon(_resolveIcon(), size: 56, color: context.colors.error),
           AppSpacing.gapMd,
           Text(title, style: context.text.titleMedium, textAlign: TextAlign.center),
           AppSpacing.gapXs,
@@ -213,16 +249,6 @@ class AppErrorState extends StatelessWidget {
 }
 
 /// Gère uniformément loading / error / empty / data d'un [AsyncValue].
-///
-/// ```dart
-/// AppAsyncView(
-///   value: ref.watch(deadlinesProvider),
-///   isEmpty: (list) => list.isEmpty,
-///   empty: const AppEmptyState(icon: Icons.event_available, title: 'Aucune échéance'),
-///   onRetry: () => ref.invalidate(deadlinesProvider),
-///   data: (list) => DeadlineList(list),
-/// )
-/// ```
 class AppAsyncView<T> extends StatelessWidget {
   const AppAsyncView({
     super.key,
@@ -247,7 +273,10 @@ class AppAsyncView<T> extends StatelessWidget {
     child: value.when(
       skipLoadingOnRefresh: true,
       loading: () => KeyedSubtree(key: const ValueKey('loading'), child: loading ?? const AppSkeletonList()),
-      error: (_, _) => KeyedSubtree(key: const ValueKey('error'), child: AppErrorState(onRetry: onRetry)),
+      error: (err, _) => KeyedSubtree(
+        key: const ValueKey('error'),
+        child: AppErrorState.fromError(err, onRetry: onRetry),
+      ),
       data: (d) {
         if (empty != null && (isEmpty?.call(d) ?? false)) {
           return KeyedSubtree(key: const ValueKey('empty'), child: empty!);

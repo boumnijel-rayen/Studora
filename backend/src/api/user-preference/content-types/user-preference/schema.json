@@ -1,0 +1,76 @@
+{
+  "kind": "collectionType",
+  "collectionName": "user_preferences",
+  "info": {
+    "singularName": "user-preference",
+    "pluralName": "user-preferences",
+    "displayName": "User Preference",
+    "description": "Préférences individuelles d'un utilisateur (thème, notifications, Pomodoro, devise)"
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "attributes": {
+    "themeMode": {
+      "type": "enumeration",
+      "enum": ["light", "dark", "system"],
+      "default": "light"
+    },
+    "notificationsEnabled": {
+      "type": "boolean",
+      "default": true
+    },
+    "reminderMinutesBefore": {
+      "type": "integer",
+      "default": 30,
+      "min": 0,
+      "max": 10080
+    },
+    "currency": {
+      "type": "string",
+      "default": "€"
+    },
+    "locale": {
+      "type": "string",
+      "default": "fr_FR"
+    },
+    "onboardingSeen": {
+      "type": "boolean",
+      "default": false
+    },
+    "pomodoroWorkMinutes": {
+      "type": "integer",
+      "default": 25,
+      "min": 5,
+      "max": 120
+    },
+    "pomodoroShortBreakMinutes": {
+      "type": "integer",
+      "default": 5,
+      "min": 1,
+      "max": 60
+    },
+    "pomodoroLongBreakMinutes": {
+      "type": "integer",
+      "default": 15,
+      "min": 5,
+      "max": 60
+    },
+    "pomodoroSessionsBeforeLongBreak": {
+      "type": "integer",
+      "default": 4,
+      "min": 1,
+      "max": 12
+    },
+    "pomodoroAutoStartBreaks": {
+      "type": "boolean",
+      "default": false
+    },
+    "owner": {
+      "type": "relation",
+      "relation": "oneToOne",
+      "target": "plugin::users-permissions.user"
+    }
+  }
+}
+

@@ -1,0 +1,41 @@
+{
+  "kind": "collectionType",
+  "collectionName": "roommate_members",
+  "info": {
+    "singularName": "roommate-member",
+    "pluralName": "roommate-members",
+    "displayName": "Roommate Member",
+    "description": "Membre d'une colocation"
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "attributes": {
+    "name": {
+      "type": "string",
+      "required": true
+    },
+    "phone": {
+      "type": "string",
+      "required": true
+    },
+    "email": {
+      "type": "email",
+      "required": true
+    },
+    "roomNumber": {
+      "type": "string",
+      "required": true
+    },
+    "isPresent": {
+      "type": "boolean",
+      "default": true
+    },
+    "owner": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "plugin::users-permissions.user"
+    }
+  }
+}
+

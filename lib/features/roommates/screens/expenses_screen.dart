@@ -12,12 +12,19 @@ class ExpensesScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final expenses = ref.watch(expensesProvider);
-    final total = expenses.fold<double>(0, (a, e) => a + e.amount);
+    final expensesAsync = ref.watch(expensesAsyncProvider);
+    final expenses = expensesAsync.value ?? const [];
+    final sharedExpenses = ref.watch(sharedExpensesProvider);
+    final roommates = ref.watch(roommatesProvider);
+    final currency = ref.watch(preferencesProvider).currency;
+
+    final total = sharedExpenses.fold<double>(0, (a, e) => a + e.amount);
+    final participantsCount = roommates.isNotEmpty ? roommates.length : 1;
+    final perPerson = total / participantsCount;
 
     return AppScaffold(
       title: 'Dépenses Communes',
-      subtitle: '${expenses.length} dépenses enregistrées',
+      subtitle: '${expenses.length} opération${expenses.length > 1 ? 's' : ''} enregistrée${expenses.length > 1 ? 's' : ''}',
       actions: [
         IconButton(
           tooltip: 'Soldes',
@@ -30,59 +37,75 @@ class ExpensesScreen extends ConsumerWidget {
           onPressed: () => context.push(RoommatesRoutes.newExpense),
         ),
       ],
-      body: ListView(
-        padding: const EdgeInsets.all(AppSpacing.md),
-        children: [
-          // Carte total des dépenses
-          AppCard(
-            padding: const EdgeInsets.all(AppSpacing.lg),
-            child: Row(
-              children: [
-                const AppIconBox(icon: Icons.receipt_long_rounded, color: AppColors.primary, size: 48),
-                AppSpacing.gapMd,
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text('Total dépenses partagées', style: context.text.titleSmall),
-                      Text(
-                        Formatters.money(total),
-                        style: context.text.headlineSmall?.copyWith(fontWeight: FontWeight.bold),
-                      ),
-                      Text('Soit ${(total / 3).toStringAsFixed(2)} € / personne (3 colocs)', style: context.text.bodySmall),
-                    ],
+      body: AppAsyncView(
+        value: expensesAsync,
+        isEmpty: (items) => items.isEmpty,
+        empty: AppEmptyState(
+          icon: Icons.receipt_long_outlined,
+          title: 'Aucune dépense commune',
+          message: 'Ajoutez vos achats partagés pour suivre l\'équilibre des comptes.',
+          actionLabel: 'Nouvelle dépense',
+          onAction: () => context.push(RoommatesRoutes.newExpense),
+        ),
+        onRetry: () => ref.read(expensesAsyncProvider.notifier).refresh(),
+        data: (items) => ListView(
+          padding: const EdgeInsets.all(AppSpacing.md),
+          children: [
+            // Carte total des dépenses
+            AppCard(
+              padding: const EdgeInsets.all(AppSpacing.lg),
+              child: Row(
+                children: [
+                  const AppIconBox(
+                    icon: Icons.receipt_long_rounded,
+                    color: AppColors.primary,
+                    size: 48,
                   ),
-                ),
-              ],
+                  AppSpacing.gapMd,
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('Total dépenses partagées', style: context.text.titleSmall),
+                        Text(
+                          Formatters.money(total, symbol: currency),
+                          style: context.text.headlineSmall?.copyWith(
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        Text(
+                          'Soit ${Formatters.money(perPerson, symbol: currency)} / personne ($participantsCount coloc${participantsCount > 1 ? 's' : ''})',
+                          style: context.text.bodySmall,
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
             ),
-          ),
-          AppSpacing.gapLg,
+            AppSpacing.gapLg,
 
-          AppSectionHeader(
-            title: 'Historique des dépenses',
-            actionLabel: 'Nouvelle dépense',
-            onAction: () => context.push(RoommatesRoutes.newExpense),
-          ),
+            AppSectionHeader(
+              title: 'Historique des opérations',
+              actionLabel: 'Nouvelle dépense',
+              onAction: () => context.push(RoommatesRoutes.newExpense),
+            ),
 
-          if (expenses.isEmpty)
-            const AppCard(
-              padding: EdgeInsets.all(AppSpacing.xl),
-              child: Center(child: Text('Aucune dépense enregistrée.')),
-            )
-          else
-            for (final exp in expenses) ...[
-              _ExpenseTile(expense: exp),
+            for (final exp in items) ...[
+              _ExpenseTile(expense: exp, currency: currency),
               AppSpacing.gapSm,
             ],
-        ],
+          ],
+        ),
       ),
     );
   }
 }
 
 class _ExpenseTile extends ConsumerWidget {
-  const _ExpenseTile({required this.expense});
+  const _ExpenseTile({required this.expense, required this.currency});
   final Expense expense;
+  final String currency;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -90,6 +113,7 @@ class _ExpenseTile extends ConsumerWidget {
       'Alimentation' => Icons.shopping_basket_rounded,
       'Factures' => Icons.wifi_rounded,
       'Ménage' => Icons.cleaning_services_rounded,
+      'Remboursement' => Icons.swap_horiz_rounded,
       _ => Icons.payments_rounded,
     };
 
@@ -104,7 +128,9 @@ class _ExpenseTile extends ConsumerWidget {
               children: [
                 Text(expense.title, style: context.text.titleSmall),
                 Text(
-                  'Payé par ${expense.paidByName} • ${Formatters.shortDate(expense.date)}',
+                  expense.isSettlement && expense.reimbursedToName != null
+                      ? '${expense.paidByName} → ${expense.reimbursedToName} • ${Formatters.shortDate(expense.date)}'
+                      : 'Payé par ${expense.paidByName} • ${Formatters.shortDate(expense.date)}',
                   style: context.text.bodySmall,
                 ),
               ],
@@ -114,15 +140,29 @@ class _ExpenseTile extends ConsumerWidget {
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
               Text(
-                Formatters.money(expense.amount),
+                Formatters.money(expense.amount, symbol: currency),
                 style: context.text.titleSmall?.copyWith(fontWeight: FontWeight.bold),
               ),
-              AppBadge(label: expense.category, tone: AppBadgeTone.neutral),
+              AppBadge(
+                label: expense.category,
+                tone: expense.isSettlement ? AppBadgeTone.success : AppBadgeTone.neutral,
+              ),
             ],
           ),
           IconButton(
             icon: const Icon(Icons.delete_outline_rounded, size: 18),
-            onPressed: () => ref.read(expensesProvider.notifier).delete(expense.id),
+            onPressed: () async {
+              try {
+                await ref.read(expensesAsyncProvider.notifier).delete(expense.id);
+              } catch (e) {
+                if (context.mounted) {
+                  AppSnackbar.error(
+                    context,
+                    e is ApiException ? e.message : 'Impossible de supprimer la dépense.',
+                  );
+                }
+              }
+            },
           ),
         ],
       ),

@@ -1,0 +1,46 @@
+{
+  "kind": "singleType",
+  "collectionName": "app_settings",
+  "info": {
+    "singularName": "app-setting",
+    "pluralName": "app-settings",
+    "displayName": "App Setting",
+    "description": "Paramètres globaux de l'application Studora (séparés des préférences utilisateur)"
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "attributes": {
+    "appName": {
+      "type": "string",
+      "default": "Studora",
+      "required": true
+    },
+    "appVersion": {
+      "type": "string",
+      "default": "1.0.0",
+      "required": true
+    },
+    "supportEmail": {
+      "type": "email",
+      "default": "support@studora.app"
+    },
+    "maintenanceMode": {
+      "type": "boolean",
+      "default": false
+    },
+    "defaultCurrency": {
+      "type": "string",
+      "default": "€"
+    },
+    "defaultReminderMinutes": {
+      "type": "integer",
+      "default": 30
+    },
+    "supportedCurrencies": {
+      "type": "json",
+      "default": ["€", "TND", "$"]
+    }
+  }
+}
+

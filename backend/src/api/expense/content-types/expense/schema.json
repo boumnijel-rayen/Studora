@@ -1,0 +1,49 @@
+{
+  "kind": "collectionType",
+  "collectionName": "expenses",
+  "info": {
+    "singularName": "expense",
+    "pluralName": "expenses",
+    "displayName": "Expense",
+    "description": "Dépense partagée ou remboursement au sein de la colocation"
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "attributes": {
+    "title": {
+      "type": "string",
+      "required": true
+    },
+    "amount": {
+      "type": "decimal",
+      "required": true,
+      "min": 0.01
+    },
+    "paidByName": {
+      "type": "string",
+      "required": true
+    },
+    "reimbursedToName": {
+      "type": "string"
+    },
+    "isSettlement": {
+      "type": "boolean",
+      "default": false
+    },
+    "date": {
+      "type": "datetime",
+      "required": true
+    },
+    "category": {
+      "type": "string",
+      "default": "Alimentation"
+    },
+    "owner": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "plugin::users-permissions.user"
+    }
+  }
+}
+

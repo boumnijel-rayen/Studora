@@ -17,6 +17,7 @@ class _CreateGroupScreenState extends ConsumerState<CreateGroupScreen> {
   final _nameCtrl = TextEditingController();
   final _descCtrl = TextEditingController();
   String? _selectedSubjectId;
+  bool _isSaving = false;
 
   @override
   void dispose() {
@@ -25,20 +26,34 @@ class _CreateGroupScreenState extends ConsumerState<CreateGroupScreen> {
     super.dispose();
   }
 
-  void _save() {
+  Future<void> _save() async {
+    if (_isSaving) return;
+    final subjects = ref.read(subjectsProvider);
     if (!_formKey.currentState!.validate() || _selectedSubjectId == null) {
       if (_selectedSubjectId == null) {
-        AppSnackbar.error(context, 'Veuillez choisir une matière');
+        AppSnackbar.error(context, 'Veuillez choisir ou créer une matière');
       }
       return;
     }
 
-    final subject = MockSharedData.subjects.firstWhere((s) => s.id == _selectedSubjectId);
-    final user = ref.read(currentUserProvider) ?? MockSharedData.demoUser;
-    final code = '${subject.shortName.toUpperCase().substring(0, 3)}${DateTime.now().millisecond % 99}';
+    final user = ref.read(currentUserProvider);
+    if (user == null) {
+      AppSnackbar.error(context, 'Session expirée. Veuillez vous reconnecter.');
+      return;
+    }
+
+    final subject = subjects.where((s) => s.id == _selectedSubjectId).firstOrNull;
+    if (subject == null) return;
+
+    final prefix = subject.shortName.length >= 3
+        ? subject.shortName.toUpperCase().substring(0, 3)
+        : subject.shortName.toUpperCase().padRight(3, 'X');
+    final code = '$prefix${(DateTime.now().millisecondsSinceEpoch % 900 + 100)}';
+
+    setState(() => _isSaving = true);
 
     final group = StudyGroup(
-      id: 'g-${DateTime.now().millisecondsSinceEpoch}',
+      id: '',
       name: _nameCtrl.text.trim(),
       description: _descCtrl.text.trim(),
       subjectId: subject.id,
@@ -49,14 +64,22 @@ class _CreateGroupScreenState extends ConsumerState<CreateGroupScreen> {
       isJoined: true,
     );
 
-    ref.read(groupsProvider.notifier).addGroup(group);
-    AppSnackbar.success(context, 'Groupe créé avec succès ! Code : $code');
-    Navigator.pop(context);
+    try {
+      final created = await ref.read(groupsAsyncProvider.notifier).addGroup(group);
+      if (!mounted) return;
+      AppSnackbar.success(context, 'Groupe créé avec succès ! Code : ${created.code}');
+      Navigator.pop(context);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _isSaving = false);
+      AppSnackbar.error(context, ApiException.fromError(e).message);
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    const subjects = MockSharedData.subjects;
+    final subjects = ref.watch(subjectsProvider);
+    final validSubjectId = subjects.any((s) => s.id == _selectedSubjectId) ? _selectedSubjectId : null;
 
     return AppScaffold(
       title: 'Créer un groupe',
@@ -74,13 +97,31 @@ class _CreateGroupScreenState extends ConsumerState<CreateGroupScreen> {
                 validator: Validators.required(),
               ),
               AppSpacing.gapMd,
-              AppDropdownField<String>(
-                label: 'Matière associée',
-                value: _selectedSubjectId,
-                hint: 'Sélectionner une matière',
-                items: subjects.map((s) => s.id).toList(),
-                itemLabel: (id) => subjects.firstWhere((s) => s.id == id).name,
-                onChanged: (v) => setState(() => _selectedSubjectId = v),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Expanded(
+                    child: AppDropdownField<String>(
+                      label: 'Matière associée',
+                      value: validSubjectId,
+                      hint: subjects.isEmpty ? 'Créez d\'abord une matière →' : 'Sélectionner une matière',
+                      items: subjects.map((s) => s.id).toList(),
+                      itemLabel: (id) => subjects.firstWhere((s) => s.id == id).name,
+                      onChanged: (v) => setState(() => _selectedSubjectId = v),
+                    ),
+                  ),
+                  AppSpacing.gapXs,
+                  IconButton.filledTonal(
+                    tooltip: 'Nouvelle matière',
+                    icon: const Icon(Icons.add_rounded),
+                    onPressed: () async {
+                      final created = await showCreateSubjectSheet(context, ref);
+                      if (created != null && mounted) {
+                        setState(() => _selectedSubjectId = created.id);
+                      }
+                    },
+                  ),
+                ],
               ),
               AppSpacing.gapMd,
               AppTextField(
@@ -94,6 +135,7 @@ class _CreateGroupScreenState extends ConsumerState<CreateGroupScreen> {
               AppButton(
                 label: 'Créer le groupe d\'étude',
                 icon: Icons.check_rounded,
+                isLoading: _isSaving,
                 expand: true,
                 onPressed: _save,
               ),

@@ -14,10 +14,11 @@ class LoginScreen extends ConsumerStatefulWidget {
 
 class _LoginScreenState extends ConsumerState<LoginScreen> {
   final _formKey = GlobalKey<FormState>();
-  final _emailCtrl = TextEditingController(text: 'rayen.benali@univ.fr');
-  final _passCtrl = TextEditingController(text: 'Studora2026!');
+  final _emailCtrl = TextEditingController();
+  final _passCtrl = TextEditingController();
   bool _isLoading = false;
   bool _rememberMe = true;
+  String? _errorMessage;
 
   @override
   void dispose() {
@@ -27,15 +28,36 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   }
 
   Future<void> _submit() async {
+    if (_isLoading) return;
+    setState(() => _errorMessage = null);
     if (!_formKey.currentState!.validate()) return;
 
     setState(() => _isLoading = true);
-    await Future<void>.delayed(const Duration(milliseconds: 600));
-    if (!mounted) return;
-
-    ref.read(sessionProvider.notifier).signIn(MockSharedData.demoUser);
-    AppSnackbar.success(context, 'Ravi de vous revoir, ${MockSharedData.demoUser.firstName} !');
-    context.go('/home');
+    try {
+      final user = await ref.read(sessionProvider.notifier).login(
+        identifier: _emailCtrl.text,
+        password: _passCtrl.text,
+        rememberMe: _rememberMe,
+      );
+      if (!mounted) return;
+      AppSnackbar.success(context, 'Ravi de vous revoir, ${user.firstName.isNotEmpty ? user.firstName : user.fullName} !');
+      context.go('/home');
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _isLoading = false;
+        _errorMessage = e.message;
+      });
+      AppSnackbar.error(context, e.message);
+    } catch (e) {
+      if (!mounted) return;
+      final err = ApiException.fromError(e);
+      setState(() {
+        _isLoading = false;
+        _errorMessage = err.message;
+      });
+      AppSnackbar.error(context, err.message);
+    }
   }
 
   @override
@@ -77,6 +99,30 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   ),
                   AppSpacing.gapXl,
 
+                  if (_errorMessage != null) ...[
+                    Container(
+                      padding: const EdgeInsets.all(AppSpacing.sm),
+                      decoration: BoxDecoration(
+                        color: context.colors.error.withValues(alpha: 0.1),
+                        borderRadius: AppRadius.brMd,
+                        border: Border.all(color: context.colors.error.withValues(alpha: 0.4)),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(Icons.error_outline_rounded, color: context.colors.error, size: 20),
+                          AppSpacing.gapXs,
+                          Expanded(
+                            child: Text(
+                              _errorMessage!,
+                              style: context.text.bodySmall?.copyWith(color: context.colors.error),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    AppSpacing.gapMd,
+                  ],
+
                   // Champs de formulaire
                   AppTextField(
                     controller: _emailCtrl,
@@ -84,6 +130,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     hint: 'prenom.nom@univ.fr',
                     prefixIcon: Icons.email_outlined,
                     keyboardType: TextInputType.emailAddress,
+                    autofillHints: const [AutofillHints.email],
                     validator: Validators.compose([
                       Validators.required('Veuillez saisir votre e-mail'),
                       Validators.email(),
@@ -93,6 +140,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   AppPasswordField(
                     controller: _passCtrl,
                     label: 'Mot de passe',
+                    onSubmitted: (_) => _submit(),
                     validator: Validators.required('Veuillez saisir votre mot de passe'),
                   ),
                   AppSpacing.gapSm,
@@ -125,18 +173,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     expand: true,
                     isLoading: _isLoading,
                     onPressed: _submit,
-                  ),
-                  AppSpacing.gapSm,
-
-                  // Remplissage rapide Démo
-                  AppButton(
-                    label: 'Remplir compte Démo',
-                    variant: AppButtonVariant.ghost,
-                    icon: Icons.flash_on_rounded,
-                    onPressed: () {
-                      _emailCtrl.text = 'rayen.benali@univ.fr';
-                      _passCtrl.text = 'Studora2026!';
-                    },
                   ),
                   AppSpacing.gapXl,
 

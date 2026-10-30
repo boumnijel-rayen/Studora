@@ -25,7 +25,8 @@ class _DeadlinesScreenState extends ConsumerState<DeadlinesScreen> with SingleTi
 
   @override
   Widget build(BuildContext context) {
-    final allDeadlines = ref.watch(deadlinesProvider);
+    final deadlinesAsync = ref.watch(deadlinesAsyncProvider);
+    final allDeadlines = deadlinesAsync.asData?.value ?? const <Deadline>[];
     final pending = allDeadlines.where((d) => !d.isCompleted).toList()
       ..sort((a, b) => a.dueDate.compareTo(b.dueDate));
     final completed = allDeadlines.where((d) => d.isCompleted).toList();
@@ -43,12 +44,19 @@ class _DeadlinesScreenState extends ConsumerState<DeadlinesScreen> with SingleTi
         controller: _tabCtrl,
         tabs: ['À venir (${pending.length})', 'Terminées (${completed.length})'],
       ),
-      body: TabBarView(
-        controller: _tabCtrl,
-        children: [
-          _DeadlineListView(deadlines: pending, isCompletedTab: false),
-          _DeadlineListView(deadlines: completed, isCompletedTab: true),
-        ],
+      body: deadlinesAsync.when(
+        loading: () => const AppSkeletonList(),
+        error: (err, _) => AppErrorState.fromError(
+          err,
+          onRetry: () => ref.invalidate(deadlinesAsyncProvider),
+        ),
+        data: (_) => TabBarView(
+          controller: _tabCtrl,
+          children: [
+            _DeadlineListView(deadlines: pending, isCompletedTab: false),
+            _DeadlineListView(deadlines: completed, isCompletedTab: true),
+          ],
+        ),
       ),
     );
   }
@@ -75,7 +83,7 @@ class _DeadlineListView extends ConsumerWidget {
               ),
               AppSpacing.gapMd,
               Text(
-                isCompletedTab ? 'Aucune tâche archivée' : 'Toutes les échéances sont validées ! 🎉',
+                isCompletedTab ? 'Aucune tâche archivée' : 'Aucune échéance en attente',
                 style: context.text.titleSmall,
                 textAlign: TextAlign.center,
               ),
@@ -98,12 +106,19 @@ class _DeadlineListView extends ConsumerWidget {
             children: [
               Checkbox(
                 value: d.isCompleted,
-                onChanged: (_) {
-                  ref.read(deadlinesProvider.notifier).toggleCompleted(d.id);
-                  AppSnackbar.info(
-                    context,
-                    d.isCompleted ? 'Échéance remise en attente' : 'Échéance marquée comme terminée !',
-                  );
+                onChanged: (_) async {
+                  try {
+                    await ref.read(deadlinesAsyncProvider.notifier).toggleCompleted(d.id);
+                    if (!context.mounted) return;
+                    AppSnackbar.info(
+                      context,
+                      d.isCompleted ? 'Échéance remise en attente' : 'Échéance marquée comme terminée !',
+                    );
+                  } catch (e) {
+                    if (context.mounted) {
+                      AppSnackbar.error(context, ApiException.fromError(e).message);
+                    }
+                  }
                 },
               ),
               AppSpacing.gapSm,
@@ -163,7 +178,15 @@ class _DeadlineListView extends ConsumerWidget {
               ),
               IconButton(
                 icon: const Icon(Icons.delete_outline_rounded, size: 20),
-                onPressed: () => ref.read(deadlinesProvider.notifier).delete(d.id),
+                onPressed: () async {
+                  try {
+                    await ref.read(deadlinesAsyncProvider.notifier).delete(d.id);
+                  } catch (e) {
+                    if (context.mounted) {
+                      AppSnackbar.error(context, ApiException.fromError(e).message);
+                    }
+                  }
+                },
               ),
             ],
           ),

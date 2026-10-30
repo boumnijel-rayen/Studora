@@ -13,16 +13,12 @@ class StudyTasksScreen extends ConsumerStatefulWidget {
 }
 
 class _StudyTasksScreenState extends ConsumerState<StudyTasksScreen> {
-  /// Évite d'empiler plusieurs feuilles si l'utilisateur tape vite sur « + ».
   bool _sheetOpen = false;
 
   Future<void> _openAddTaskSheet() async {
     if (_sheetOpen) return;
     _sheetOpen = true;
 
-    // La feuille est poussée sur le navigateur RACINE (cf. AppBottomSheet).
-    // Elle gère elle-même son état et se ferme via SON propre contexte ;
-    // elle renvoie la tâche créée, ou `null` si l'utilisateur l'a fermée.
     final created = await AppBottomSheet.show<StudyTask>(
       context,
       title: 'Nouvelle tâche',
@@ -36,35 +32,64 @@ class _StudyTasksScreenState extends ConsumerState<StudyTasksScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final tasks = ref.watch(studyTasksProvider);
-    const subjects = MockSharedData.subjects;
+    final tasksAsync = ref.watch(studyTasksAsyncProvider);
+    final subjectsAsync = ref.watch(subjectsAsyncProvider);
 
     return AppScaffold(
       title: 'Tâches par matière',
       actions: [
+        IconButton(
+          tooltip: 'Nouvelle matière',
+          icon: const Icon(Icons.library_add_outlined),
+          onPressed: () => showCreateSubjectSheet(context, ref),
+        ),
         IconButton(
           tooltip: 'Ajouter une tâche',
           icon: const Icon(Icons.add_task_rounded),
           onPressed: _openAddTaskSheet,
         ),
       ],
-      body: ListView(
-        padding: const EdgeInsets.all(AppSpacing.md),
-        children: [
-          for (final sub in subjects) ...[
-            _SubjectTaskSection(subject: sub, tasks: tasks.where((t) => t.subjectId == sub.id).toList()),
-            AppSpacing.gapMd,
-          ],
-        ],
+      body: tasksAsync.when(
+        loading: () => const AppSkeletonList(),
+        error: (err, _) => AppErrorState.fromError(
+          err,
+          onRetry: () {
+            ref.invalidate(studyTasksAsyncProvider);
+            ref.invalidate(subjectsAsyncProvider);
+          },
+        ),
+        data: (tasks) {
+          final subjects = subjectsAsync.asData?.value ?? const <Subject>[];
+          if (tasks.isEmpty) {
+            return AppEmptyState(
+              icon: Icons.checklist_rounded,
+              title: 'Aucune tâche enregistrée',
+              message: subjects.isEmpty
+                  ? 'Créez d\'abord vos matières, puis ajoutez vos tâches de révision.'
+                  : 'Ajoutez vos premières tâches par matière pour suivre votre avancement.',
+              actionLabel: 'Ajouter une tâche',
+              onAction: _openAddTaskSheet,
+            );
+          }
+
+          return ListView(
+            padding: const EdgeInsets.all(AppSpacing.md),
+            children: [
+              for (final sub in subjects) ...[
+                _SubjectTaskSection(
+                  subject: sub,
+                  tasks: tasks.where((t) => t.subjectId == sub.id).toList(),
+                ),
+                AppSpacing.gapMd,
+              ],
+            ],
+          );
+        },
       ),
     );
   }
 }
 
-/// Contenu de la feuille « Nouvelle tâche ».
-///
-/// Widget autonome : il possède son contrôleur et son état, ce qui garantit
-/// qu'ils vivent exactement aussi longtemps que la feuille elle-même.
 class _AddTaskSheet extends ConsumerStatefulWidget {
   const _AddTaskSheet();
 
@@ -75,11 +100,19 @@ class _AddTaskSheet extends ConsumerStatefulWidget {
 class _AddTaskSheetState extends ConsumerState<_AddTaskSheet> {
   final _formKey = GlobalKey<FormState>();
   final _titleCtrl = TextEditingController();
-  String? _subjectId = MockSharedData.subjects.first.id;
+  String? _subjectId;
+  DateTime? _dueDate;
   String? _error;
-
-  /// Empêche une double soumission (et donc un double `pop`).
   bool _submitting = false;
+
+  @override
+  void initState() {
+    super.initState();
+    final subjects = ref.read(subjectsProvider);
+    if (subjects.isNotEmpty) {
+      _subjectId = subjects.first.id;
+    }
+  }
 
   @override
   void dispose() {
@@ -87,15 +120,18 @@ class _AddTaskSheetState extends ConsumerState<_AddTaskSheet> {
     super.dispose();
   }
 
-  void _submit() {
+  Future<void> _submit() async {
     if (_submitting) return;
     setState(() => _error = null);
     if (!(_formKey.currentState?.validate() ?? false)) return;
+    if (_subjectId == null) {
+      setState(() => _error = 'Veuillez choisir ou créer une matière.');
+      return;
+    }
 
     final title = _titleCtrl.text.trim();
     final subjectId = _subjectId!;
 
-    // Règle métier : pas de doublon dans une même matière.
     final exists = ref
         .read(studyTasksProvider)
         .any((t) => t.subjectId == subjectId && t.title.toLowerCase() == title.toLowerCase());
@@ -104,43 +140,63 @@ class _AddTaskSheetState extends ConsumerState<_AddTaskSheet> {
       return;
     }
 
-    _submitting = true;
-    final task = StudyTask(
-      id: 't-${DateTime.now().microsecondsSinceEpoch}',
+    setState(() => _submitting = true);
+    final draft = StudyTask(
+      id: '',
       subjectId: subjectId,
       title: title,
+      dueDate: _dueDate,
     );
 
     try {
-      // Le provider notifie immédiatement l'écran : la liste se met à jour.
-      ref.read(studyTasksProvider.notifier).add(task);
+      final created = await ref.read(studyTasksAsyncProvider.notifier).add(draft);
+      if (!mounted) return;
+      Navigator.of(context).pop(created);
     } catch (e) {
-      _submitting = false;
-      setState(() => _error = 'Impossible d\'ajouter la tâche. Réessaie dans un instant.');
-      return;
+      if (!mounted) return;
+      setState(() {
+        _submitting = false;
+        _error = ApiException.fromError(e).message;
+      });
     }
-
-    // Fermeture via le contexte de la feuille → dépile bien la feuille
-    // (navigateur racine), et non la page sous-jacente.
-    Navigator.of(context).pop(task);
   }
 
   @override
   Widget build(BuildContext context) {
-    const subjects = MockSharedData.subjects;
+    final subjects = ref.watch(subjectsProvider);
+    final validSubjectId = subjects.any((s) => s.id == _subjectId) ? _subjectId : null;
 
     return Form(
       key: _formKey,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          AppDropdownField<String>(
-            label: 'Matière',
-            value: _subjectId,
-            items: subjects.map((s) => s.id).toList(),
-            itemLabel: (id) => subjects.firstWhere((s) => s.id == id).name,
-            onChanged: (v) => setState(() => _subjectId = v),
-            validator: (v) => v == null ? 'Choisis une matière' : null,
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Expanded(
+                child: AppDropdownField<String>(
+                  label: 'Matière',
+                  value: validSubjectId,
+                  hint: subjects.isEmpty ? 'Créez d\'abord une matière →' : 'Choisir une matière',
+                  items: subjects.map((s) => s.id).toList(),
+                  itemLabel: (id) => subjects.firstWhere((s) => s.id == id).name,
+                  onChanged: (v) => setState(() => _subjectId = v),
+                  validator: (v) => v == null ? 'Choisis une matière' : null,
+                ),
+              ),
+              AppSpacing.gapXs,
+              IconButton.filledTonal(
+                tooltip: 'Nouvelle matière',
+                icon: const Icon(Icons.add_rounded),
+                onPressed: () async {
+                  final created = await showCreateSubjectSheet(context, ref);
+                  if (created != null && mounted) {
+                    setState(() => _subjectId = created.id);
+                  }
+                },
+              ),
+            ],
           ),
           AppSpacing.gapMd,
           AppTextField(
@@ -150,6 +206,12 @@ class _AddTaskSheetState extends ConsumerState<_AddTaskSheet> {
             textInputAction: TextInputAction.done,
             onSubmitted: (_) => _submit(),
             validator: (v) => (v == null || v.trim().isEmpty) ? 'Saisis un intitulé' : null,
+          ),
+          AppSpacing.gapMd,
+          AppDateField(
+            label: 'Date limite (optionnelle)',
+            initialValue: _dueDate,
+            onChanged: (d) => setState(() => _dueDate = d),
           ),
           if (_error != null) ...[
             AppSpacing.gapSm,
@@ -220,8 +282,20 @@ class _SubjectTaskSection extends ConsumerWidget {
           padding: const EdgeInsets.symmetric(vertical: AppSpacing.xs),
           child: Column(
             children: [
-              for (final t in tasks) ...[
-                CheckboxListTile(
+              for (final t in tasks)
+                ListTile(
+                  leading: Checkbox(
+                    value: t.isCompleted,
+                    onChanged: (_) async {
+                      try {
+                        await ref.read(studyTasksAsyncProvider.notifier).toggle(t.id);
+                      } catch (e) {
+                        if (context.mounted) {
+                          AppSnackbar.error(context, ApiException.fromError(e).message);
+                        }
+                      }
+                    },
+                  ),
                   title: Text(
                     t.title,
                     style: TextStyle(
@@ -229,10 +303,22 @@ class _SubjectTaskSection extends ConsumerWidget {
                       color: t.isCompleted ? context.colors.textSecondary : null,
                     ),
                   ),
-                  value: t.isCompleted,
-                  onChanged: (_) => ref.read(studyTasksProvider.notifier).toggle(t.id),
+                  subtitle: t.dueDate != null
+                      ? Text('Échéance : ${Formatters.shortDate(t.dueDate!)}', style: context.text.bodySmall)
+                      : null,
+                  trailing: IconButton(
+                    icon: const Icon(Icons.delete_outline_rounded, size: 18),
+                    onPressed: () async {
+                      try {
+                        await ref.read(studyTasksAsyncProvider.notifier).delete(t.id);
+                      } catch (e) {
+                        if (context.mounted) {
+                          AppSnackbar.error(context, ApiException.fromError(e).message);
+                        }
+                      }
+                    },
+                  ),
                 ),
-              ],
             ],
           ),
         ),

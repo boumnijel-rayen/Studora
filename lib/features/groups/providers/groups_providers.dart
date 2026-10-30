@@ -1,132 +1,129 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/core.dart';
 import '../models/group_models.dart';
 
-final _initialGroups = [
-  const StudyGroup(
-    id: 'g-1',
-    name: 'Team Algo & Complexité',
-    description: 'Préparation des examens et partage des corrigés de TD en Algorithmique.',
-    subjectId: 's-algo',
-    subjectName: 'Algorithmique',
-    memberNames: ['Rayen Ben Ali', 'Alice Dubois', 'Thomas Leroy', 'Inès Mansour'],
-    code: 'ALGO42',
-    colorIndex: 3,
-    isJoined: true,
-  ),
-  const StudyGroup(
-    id: 'g-2',
-    name: 'Dev Mobile Flutter L3',
-    description: 'Entraide sur les widgets, Riverpod et la mise en commun des projets d\'application.',
-    subjectId: 's-mobile',
-    subjectName: 'Développement mobile',
-    memberNames: ['Rayen Ben Ali', 'Marc Dupont', 'Sophie Bernard'],
-    code: 'FLUT77',
-    colorIndex: 2,
-    isJoined: true,
-  ),
-  const StudyGroup(
-    id: 'g-3',
-    name: 'Prépa Partiels Maths',
-    description: 'Groupe d\'entraînement intensif aux équations et séries.',
-    subjectId: 's-math',
-    subjectName: 'Mathématiques',
-    memberNames: ['Alice Dubois', 'Inès Mansour', 'Lucas Martin'],
-    code: 'MATH99',
-    colorIndex: 0,
-    isJoined: false,
-  ),
-];
-
-final _initialMessages = <String, List<GroupMessage>>{
-  'g-1': [
-    GroupMessage(
-      id: 'm-1',
-      groupId: 'g-1',
-      senderName: 'Alice Dubois',
-      text: 'Salut tout le monde ! On se retrouve à la BU vers 14h pour le TD 3 ?',
-      timestamp: DateTime.now().subtract(const Duration(minutes: 45)),
-      isMe: false,
-    ),
-    GroupMessage(
-      id: 'm-2',
-      groupId: 'g-1',
-      senderName: 'Thomas Leroy',
-      text: 'Carrément, j\'ai bloqué sur la question de récursivité terminale.',
-      timestamp: DateTime.now().subtract(const Duration(minutes: 32)),
-      isMe: false,
-    ),
-    GroupMessage(
-      id: 'm-3',
-      groupId: 'g-1',
-      senderName: 'Rayen Ben Ali',
-      text: 'Ça marche pour moi ! J\'apporte mes fiches de synthèse.',
-      timestamp: DateTime.now().subtract(const Duration(minutes: 15)),
-      isMe: true,
-    ),
-  ],
-  'g-2': [
-    GroupMessage(
-      id: 'm-20',
-      groupId: 'g-2',
-      senderName: 'Marc Dupont',
-      text: 'Est-ce que vous avez testé les animations avec TweenAnimationBuilder ?',
-      timestamp: DateTime.now().subtract(const Duration(hours: 1)),
-      isMe: false,
-    ),
-  ],
-};
-
-class GroupsNotifier extends Notifier<List<StudyGroup>> {
+/// Groupes d'étude connectés à Strapi (`/api/study-groups`).
+class GroupsAsyncNotifier extends AsyncNotifier<List<StudyGroup>> {
   @override
-  List<StudyGroup> build() => _initialGroups;
+  Future<List<StudyGroup>> build() async {
+    final user = ref.watch(currentUserProvider);
+    if (user == null) return const [];
 
-  void addGroup(StudyGroup group) => state = [...state, group];
+    final client = ref.read(strapiClientProvider);
+    final items = await client.getList('/study-groups');
+    return items.map(StudyGroup.fromJson).toList();
+  }
 
-  void joinGroup(String code) {
-    state = [
-      for (final g in state)
-        if (g.code.toUpperCase() == code.toUpperCase())
-          g.copyWith(isJoined: true, memberNames: [...g.memberNames, 'Rayen Ben Ali'])
-        else
-          g,
-    ];
+  Future<StudyGroup> addGroup(StudyGroup group) async {
+    final client = ref.read(strapiClientProvider);
+    final response = await client.post('/study-groups', body: group.toJson());
+    final created = StudyGroup.fromJson(StrapiClient.unwrapMap(response));
+    final current = state.asData?.value ?? const <StudyGroup>[];
+    state = AsyncData([...current, created]);
+    return created;
+  }
+
+  Future<StudyGroup> joinGroup(String code) async {
+    final client = ref.read(strapiClientProvider);
+    final response = await client.post(
+      '/study-groups/join',
+      body: {'code': code.trim().toUpperCase()},
+    );
+    final joined = StudyGroup.fromJson(StrapiClient.unwrapMap(response));
+    final current = state.asData?.value ?? const <StudyGroup>[];
+    final exists = current.any((g) => g.id == joined.id);
+    if (exists) {
+      state = AsyncData([
+        for (final g in current) g.id == joined.id ? joined : g,
+      ]);
+    } else {
+      state = AsyncData([...current, joined]);
+    }
+    return joined;
+  }
+
+  Future<void> deleteGroup(String id) async {
+    final client = ref.read(strapiClientProvider);
+    await client.delete('/study-groups/$id');
+    final current = state.asData?.value ?? const <StudyGroup>[];
+    state = AsyncData(current.where((g) => g.id != id).toList());
   }
 }
 
-final groupsProvider = NotifierProvider<GroupsNotifier, List<StudyGroup>>(GroupsNotifier.new);
+final groupsAsyncProvider =
+    AsyncNotifierProvider<GroupsAsyncNotifier, List<StudyGroup>>(GroupsAsyncNotifier.new);
 
-class GroupMessagesNotifier extends Notifier<Map<String, List<GroupMessage>>> {
-  @override
-  Map<String, List<GroupMessage>> build() => _initialMessages;
+final groupsProvider = Provider<List<StudyGroup>>(
+  (ref) => ref.watch(groupsAsyncProvider).asData?.value ?? const [],
+);
 
-  void sendMessage(String groupId, String text, String senderName) {
-    final newMsg = GroupMessage(
-      id: 'm-${DateTime.now().millisecondsSinceEpoch}',
-      groupId: groupId,
-      senderName: senderName,
-      text: text,
-      timestamp: DateTime.now(),
-      isMe: true,
+/// Messages d'un groupe récupérés et envoyés via Strapi (`/api/group-messages`).
+final groupMessagesFamilyProvider =
+    FutureProvider.family<List<GroupMessage>, String>((ref, groupId) async {
+      final user = ref.watch(currentUserProvider);
+      if (user == null || groupId.isEmpty) return const [];
+
+      final client = ref.read(strapiClientProvider);
+      final items = await client.getList(
+        '/group-messages',
+        queryParameters: {'groupId': groupId},
+      );
+      return items
+          .map((json) => GroupMessage.fromJson(json, currentUserId: user.id))
+          .toList();
+    });
+
+/// Activités d'un groupe récupérées depuis Strapi (`/api/group-activities`).
+final groupActivitiesFamilyProvider =
+    FutureProvider.family<List<GroupActivity>, String>((ref, groupId) async {
+      final user = ref.watch(currentUserProvider);
+      if (user == null || groupId.isEmpty) return const [];
+
+      final client = ref.read(strapiClientProvider);
+      final items = await client.getList(
+        '/group-activities',
+        queryParameters: {'groupId': groupId},
+      );
+      return items.map(GroupActivity.fromJson).toList();
+    });
+
+/// Service d'actions sur les messages et activités d'un groupe.
+class GroupChatService {
+  GroupChatService(this._ref);
+  final Ref _ref;
+
+  Future<GroupMessage> sendMessage({
+    required String groupId,
+    required String text,
+    required String senderName,
+  }) async {
+    final client = _ref.read(strapiClientProvider);
+    final user = _ref.read(currentUserProvider);
+    final response = await client.post(
+      '/group-messages',
+      body: {
+        'groupId': groupId,
+        'text': text.trim(),
+        'senderName': senderName,
+        'timestamp': DateTime.now().toUtc().toIso8601String(),
+      },
     );
-
-    final current = state[groupId] ?? [];
-    state = {...state, groupId: [...current, newMsg]};
+    final created = GroupMessage.fromJson(
+      StrapiClient.unwrapMap(response),
+      currentUserId: user?.id,
+    );
+    _ref.invalidate(groupMessagesFamilyProvider(groupId));
+    return created;
   }
 
-  void addIncomingMessage(String groupId, String senderName, String text) {
-    final reply = GroupMessage(
-      id: 'm-${DateTime.now().millisecondsSinceEpoch}',
-      groupId: groupId,
-      senderName: senderName,
-      text: text,
-      timestamp: DateTime.now(),
-      isMe: false,
-    );
-    final current = state[groupId] ?? [];
-    state = {...state, groupId: [...current, reply]};
+  Future<GroupActivity> createActivity(GroupActivity activity) async {
+    final client = _ref.read(strapiClientProvider);
+    final response = await client.post('/group-activities', body: activity.toJson());
+    final created = GroupActivity.fromJson(StrapiClient.unwrapMap(response));
+    _ref.invalidate(groupActivitiesFamilyProvider(activity.groupId));
+    return created;
   }
 }
 
-final groupMessagesProvider =
-    NotifierProvider<GroupMessagesNotifier, Map<String, List<GroupMessage>>>(GroupMessagesNotifier.new);
+final groupChatServiceProvider = Provider<GroupChatService>(GroupChatService.new);

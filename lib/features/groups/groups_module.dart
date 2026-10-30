@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/core.dart';
 import 'groups_routes.dart';
+import 'providers/groups_providers.dart';
 import 'screens/create_group_screen.dart';
 import 'screens/group_chat_screen.dart';
 import 'screens/group_detail_screen.dart';
@@ -60,23 +62,35 @@ class GroupsModule extends FeatureModule {
   ];
 
   @override
-  Widget? buildDashboardCard(BuildContext context) => AppCard(
-    onTap: () => context.go(GroupsRoutes.root),
-    child: Row(
-      children: [
-        const AppIconBox(icon: Icons.groups_rounded, color: AppColors.moduleGroups),
-        AppSpacing.gapSm,
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text('Groupes d\'étude', style: context.text.titleSmall),
-              Text('2 groupes actifs • 1 message non lu', style: context.text.bodySmall),
-            ],
-          ),
+  Widget? buildDashboardCard(BuildContext context) => Consumer(
+    builder: (context, ref, _) {
+      final groups = ref.watch(groupsProvider);
+      final joinedCount = groups.where((g) => g.isJoined).length;
+
+      return AppCard(
+        onTap: () => context.go(GroupsRoutes.root),
+        child: Row(
+          children: [
+            const AppIconBox(icon: Icons.groups_rounded, color: AppColors.moduleGroups),
+            AppSpacing.gapSm,
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Groupes d\'étude', style: context.text.titleSmall),
+                  Text(
+                    joinedCount == 0
+                        ? 'Aucun groupe rejoint pour le moment'
+                        : '$joinedCount groupe${joinedCount > 1 ? 's' : ''} actif${joinedCount > 1 ? 's' : ''}',
+                    style: context.text.bodySmall,
+                  ),
+                ],
+              ),
+            ),
+            const Icon(Icons.chevron_right_rounded),
+          ],
         ),
-        const Icon(Icons.chevron_right_rounded),
-      ],
-    ),
+      );
+    },
   );
 }

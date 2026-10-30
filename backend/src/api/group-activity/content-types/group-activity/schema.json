@@ -1,0 +1,40 @@
+{
+  "kind": "collectionType",
+  "collectionName": "group_activities",
+  "info": {
+    "singularName": "group-activity",
+    "pluralName": "group-activities",
+    "displayName": "Group Activity",
+    "description": "Séance ou événement programmé au sein d'un groupe d'étude"
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "attributes": {
+    "title": {
+      "type": "string",
+      "required": true
+    },
+    "description": {
+      "type": "text",
+      "default": ""
+    },
+    "date": {
+      "type": "datetime",
+      "required": true
+    },
+    "location": {
+      "type": "string",
+      "default": ""
+    },
+    "groupId": {
+      "type": "string",
+      "required": true
+    },
+    "participantNames": {
+      "type": "json",
+      "default": []
+    }
+  }
+}
+

@@ -1,102 +1,156 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/core.dart';
 import '../models/study_models.dart';
 
-final _initialSessions = [
-  StudySession(
-    id: 's-1',
-    subjectId: 's-math',
-    subjectName: 'Mathématiques',
-    durationMinutes: 50,
-    date: DateTime.now().subtract(const Duration(hours: 3)),
-    colorIndex: 0,
-    notes: 'Révision des équations différentielles et théorèmes clés.',
-    isCompleted: true,
-    linkedDeadlineTitle: 'Partiel de Mathématiques',
-  ),
-  StudySession(
-    id: 's-2',
-    subjectId: 's-algo',
-    subjectName: 'Algorithmique',
-    durationMinutes: 45,
-    date: DateTime.now().add(const Duration(hours: 4)),
-    colorIndex: 3,
-    notes: 'Arbres AVL, rotations gauche-droite et algorithme de Dijkstra.',
-    isCompleted: false,
-    linkedDeadlineTitle: 'Devoir maison Algorithmique',
-  ),
-  StudySession(
-    id: 's-3',
-    subjectId: 's-mobile',
-    subjectName: 'Développement mobile',
-    durationMinutes: 60,
-    date: DateTime.now().add(const Duration(days: 1)),
-    colorIndex: 2,
-    notes: 'Composants Flutter, gestion d\'état Riverpod et GoRouter.',
-    isCompleted: false,
-    linkedDeadlineTitle: 'Rendu Projet Flutter',
-  ),
-];
-
-final _initialTasks = [
-  const StudyTask(id: 't-1', subjectId: 's-math', title: 'Refaire l\'exercice 2 du TD 3', isCompleted: true),
-  const StudyTask(id: 't-2', subjectId: 's-math', title: 'Apprendre la formule de Taylor-Lagrange', isCompleted: false),
-  const StudyTask(id: 't-3', subjectId: 's-algo', title: 'Implémenter le parcours en largeur (BFS)', isCompleted: false),
-  const StudyTask(id: 't-4', subjectId: 's-algo', title: 'Calculer la complexité asymptotique de QuickSort', isCompleted: true),
-  const StudyTask(id: 't-5', subjectId: 's-mobile', title: 'Créer les widgets réutilisables du Design System', isCompleted: true),
-  const StudyTask(id: 't-6', subjectId: 's-mobile', title: 'Mettre en place la navigation adaptative', isCompleted: false),
-  const StudyTask(id: 't-7', subjectId: 's-bdd', title: 'Schéma relationnel et clés étrangères', isCompleted: false),
-];
-
-class StudySessionsNotifier extends Notifier<List<StudySession>> {
+/// Sessions de révision connectées à Strapi (`/api/study-sessions`).
+class StudySessionsAsyncNotifier extends AsyncNotifier<List<StudySession>> {
   @override
-  List<StudySession> build() => _initialSessions;
+  Future<List<StudySession>> build() async {
+    final user = ref.watch(currentUserProvider);
+    if (user == null) return const [];
 
-  void add(StudySession session) => state = [session, ...state];
-
-  void toggleCompleted(String id) {
-    state = [
-      for (final s in state)
-        if (s.id == id) s.copyWith(isCompleted: !s.isCompleted) else s,
-    ];
+    final client = ref.read(strapiClientProvider);
+    final items = await client.getList(
+      '/study-sessions',
+      queryParameters: {'sort': 'date:desc'},
+    );
+    return items.map(StudySession.fromJson).toList();
   }
 
-  void delete(String id) => state = state.where((s) => s.id != id).toList();
-}
-
-final studySessionsProvider =
-    NotifierProvider<StudySessionsNotifier, List<StudySession>>(StudySessionsNotifier.new);
-
-class StudyTasksNotifier extends Notifier<List<StudyTask>> {
-  @override
-  List<StudyTask> build() => _initialTasks;
-
-  void add(StudyTask task) => state = [...state, task];
-
-  void toggle(String id) {
-    state = [
-      for (final t in state)
-        if (t.id == id) t.copyWith(isCompleted: !t.isCompleted) else t,
-    ];
+  Future<StudySession> add(StudySession session) async {
+    final client = ref.read(strapiClientProvider);
+    final response = await client.post('/study-sessions', body: session.toJson());
+    final created = StudySession.fromJson(StrapiClient.unwrapMap(response));
+    final current = state.asData?.value ?? const <StudySession>[];
+    state = AsyncData([created, ...current]);
+    return created;
   }
 
-  void delete(String id) => state = state.where((t) => t.id != id).toList();
+  Future<void> toggleCompleted(String id) async {
+    final current = state.asData?.value ?? const <StudySession>[];
+    final target = current.where((s) => s.id == id).firstOrNull;
+    if (target == null) return;
+
+    final next = !target.isCompleted;
+    final client = ref.read(strapiClientProvider);
+    await client.put('/study-sessions/$id', body: {'isCompleted': next});
+
+    state = AsyncData([
+      for (final s in current)
+        if (s.id == id) s.copyWith(isCompleted: next) else s,
+    ]);
+  }
+
+  Future<void> delete(String id) async {
+    final client = ref.read(strapiClientProvider);
+    await client.delete('/study-sessions/$id');
+    final current = state.asData?.value ?? const <StudySession>[];
+    state = AsyncData(current.where((s) => s.id != id).toList());
+  }
 }
 
-final studyTasksProvider =
-    NotifierProvider<StudyTasksNotifier, List<StudyTask>>(StudyTasksNotifier.new);
+final studySessionsAsyncProvider =
+    AsyncNotifierProvider<StudySessionsAsyncNotifier, List<StudySession>>(
+      StudySessionsAsyncNotifier.new,
+    );
 
+final studySessionsProvider = Provider<List<StudySession>>(
+  (ref) => ref.watch(studySessionsAsyncProvider).asData?.value ?? const [],
+);
+
+/// Tâches par matière connectées à Strapi (`/api/study-tasks`).
+class StudyTasksAsyncNotifier extends AsyncNotifier<List<StudyTask>> {
+  @override
+  Future<List<StudyTask>> build() async {
+    final user = ref.watch(currentUserProvider);
+    if (user == null) return const [];
+
+    final client = ref.read(strapiClientProvider);
+    final items = await client.getList('/study-tasks');
+    return items.map(StudyTask.fromJson).toList();
+  }
+
+  Future<StudyTask> add(StudyTask task) async {
+    final client = ref.read(strapiClientProvider);
+    final response = await client.post('/study-tasks', body: task.toJson());
+    final created = StudyTask.fromJson(StrapiClient.unwrapMap(response));
+    final current = state.asData?.value ?? const <StudyTask>[];
+    state = AsyncData([...current, created]);
+    return created;
+  }
+
+  Future<void> toggle(String id) async {
+    final current = state.asData?.value ?? const <StudyTask>[];
+    final target = current.where((t) => t.id == id).firstOrNull;
+    if (target == null) return;
+
+    final next = !target.isCompleted;
+    final client = ref.read(strapiClientProvider);
+    await client.put('/study-tasks/$id', body: {'isCompleted': next});
+
+    state = AsyncData([
+      for (final t in current)
+        if (t.id == id) t.copyWith(isCompleted: next) else t,
+    ]);
+  }
+
+  Future<void> updateTask(StudyTask updated) async {
+    final client = ref.read(strapiClientProvider);
+    final response = await client.put('/study-tasks/${updated.id}', body: updated.toJson());
+    final saved = StudyTask.fromJson(StrapiClient.unwrapMap(response));
+    final current = state.asData?.value ?? const <StudyTask>[];
+    state = AsyncData([
+      for (final t in current)
+        if (t.id == updated.id) saved else t,
+    ]);
+  }
+
+  Future<void> delete(String id) async {
+    final client = ref.read(strapiClientProvider);
+    await client.delete('/study-tasks/$id');
+    final current = state.asData?.value ?? const <StudyTask>[];
+    state = AsyncData(current.where((t) => t.id != id).toList());
+  }
+}
+
+final studyTasksAsyncProvider =
+    AsyncNotifierProvider<StudyTasksAsyncNotifier, List<StudyTask>>(StudyTasksAsyncNotifier.new);
+
+final studyTasksProvider = Provider<List<StudyTask>>(
+  (ref) => ref.watch(studyTasksAsyncProvider).asData?.value ?? const [],
+);
+
+/// Configuration Pomodoro synchronisée avec les préférences utilisateur Strapi.
 class PomodoroConfigNotifier extends Notifier<PomodoroConfig> {
   @override
-  PomodoroConfig build() => const PomodoroConfig();
+  PomodoroConfig build() {
+    final prefs = ref.watch(preferencesProvider);
+    return PomodoroConfig(
+      workMinutes: prefs.pomodoroWorkMinutes,
+      shortBreakMinutes: prefs.pomodoroShortBreakMinutes,
+      longBreakMinutes: prefs.pomodoroLongBreakMinutes,
+      sessionsBeforeLongBreak: prefs.pomodoroSessionsBeforeLongBreak,
+      autoStartBreaks: prefs.pomodoroAutoStartBreaks,
+    );
+  }
 
-  void update(PomodoroConfig config) => state = config;
+  Future<void> update(PomodoroConfig config) async {
+    state = config;
+    await ref.read(preferencesProvider.notifier).updatePomodoroPreferences(
+      workMinutes: config.workMinutes,
+      shortBreakMinutes: config.shortBreakMinutes,
+      longBreakMinutes: config.longBreakMinutes,
+      sessionsBeforeLongBreak: config.sessionsBeforeLongBreak,
+      autoStartBreaks: config.autoStartBreaks,
+    );
+  }
 }
 
 final pomodoroConfigProvider =
     NotifierProvider<PomodoroConfigNotifier, PomodoroConfig>(PomodoroConfigNotifier.new);
 
-/// Statistiques de révision pour le tableau de bord
+/// Statistiques de révision calculées à partir des sessions réelles du backend.
 final todayStudyStatsProvider = Provider<(int minutesToday, int sessionsCompleted)>((ref) {
   final sessions = ref.watch(studySessionsProvider);
   final completed = sessions.where((s) => s.isCompleted).toList();

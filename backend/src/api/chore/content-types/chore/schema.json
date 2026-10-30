@@ -1,0 +1,41 @@
+{
+  "kind": "collectionType",
+  "collectionName": "chores",
+  "info": {
+    "singularName": "chore",
+    "pluralName": "chores",
+    "displayName": "Chore",
+    "description": "Tâche ménagère partagée dans une colocation"
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "attributes": {
+    "title": {
+      "type": "string",
+      "required": true
+    },
+    "assignedToName": {
+      "type": "string",
+      "required": true
+    },
+    "dueDate": {
+      "type": "datetime",
+      "required": true
+    },
+    "isCompleted": {
+      "type": "boolean",
+      "default": false
+    },
+    "frequency": {
+      "type": "string",
+      "default": "Hebdomadaire"
+    },
+    "owner": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "plugin::users-permissions.user"
+    }
+  }
+}
+

@@ -6,7 +6,8 @@ import '../models/schedule_models.dart';
 import '../providers/schedule_providers.dart';
 
 class AddEditCourseScreen extends ConsumerStatefulWidget {
-  const AddEditCourseScreen({super.key});
+  const AddEditCourseScreen({super.key, this.existingCourse});
+  final Course? existingCourse;
 
   @override
   ConsumerState<AddEditCourseScreen> createState() => _AddEditCourseScreenState();
@@ -18,9 +19,23 @@ class _AddEditCourseScreenState extends ConsumerState<AddEditCourseScreen> {
   int _selectedDay = 1; // Lundi
   TimeOfDay _startTime = const TimeOfDay(hour: 8, minute: 30);
   TimeOfDay _endTime = const TimeOfDay(hour: 10, minute: 30);
-  final _roomCtrl = TextEditingController();
-  final _teacherCtrl = TextEditingController();
-  final _notesCtrl = TextEditingController();
+  late final TextEditingController _roomCtrl;
+  late final TextEditingController _teacherCtrl;
+  late final TextEditingController _notesCtrl;
+  bool _isSaving = false;
+
+  @override
+  void initState() {
+    super.initState();
+    final existing = widget.existingCourse;
+    _selectedSubjectId = existing?.subjectId.isNotEmpty == true ? existing!.subjectId : null;
+    _selectedDay = existing?.dayOfWeek ?? 1;
+    _startTime = existing?.startTime ?? const TimeOfDay(hour: 8, minute: 30);
+    _endTime = existing?.endTime ?? const TimeOfDay(hour: 10, minute: 30);
+    _roomCtrl = TextEditingController(text: existing?.room ?? '');
+    _teacherCtrl = TextEditingController(text: existing?.teacher ?? '');
+    _notesCtrl = TextEditingController(text: existing?.notes ?? '');
+  }
 
   @override
   void dispose() {
@@ -30,18 +45,26 @@ class _AddEditCourseScreenState extends ConsumerState<AddEditCourseScreen> {
     super.dispose();
   }
 
-  void _save() {
+  Future<void> _save() async {
+    if (_isSaving) return;
+    final subjects = ref.read(subjectsProvider);
     if (!_formKey.currentState!.validate() || _selectedSubjectId == null) {
       if (_selectedSubjectId == null) {
-        AppSnackbar.error(context, 'Veuillez choisir une matière');
+        AppSnackbar.error(context, 'Veuillez choisir ou créer une matière');
       }
       return;
     }
 
-    final subject = MockSharedData.subjects.firstWhere((s) => s.id == _selectedSubjectId);
+    final subject = subjects.where((s) => s.id == _selectedSubjectId).firstOrNull;
+    if (subject == null) {
+      AppSnackbar.error(context, 'Matière introuvable');
+      return;
+    }
 
-    final newCourse = Course(
-      id: 'c-${DateTime.now().millisecondsSinceEpoch}',
+    setState(() => _isSaving = true);
+
+    final coursePayload = Course(
+      id: widget.existingCourse?.id ?? '',
       subjectId: subject.id,
       subjectName: subject.name,
       room: _roomCtrl.text.trim(),
@@ -53,17 +76,32 @@ class _AddEditCourseScreenState extends ConsumerState<AddEditCourseScreen> {
       notes: _notesCtrl.text.trim(),
     );
 
-    ref.read(coursesProvider.notifier).add(newCourse);
-    AppSnackbar.success(context, 'Nouveau cours ajouté au planning !');
-    Navigator.pop(context);
+    try {
+      if (widget.existingCourse != null) {
+        await ref.read(coursesAsyncProvider.notifier).updateCourse(coursePayload);
+        if (!mounted) return;
+        AppSnackbar.success(context, 'Cours modifié avec succès !');
+      } else {
+        await ref.read(coursesAsyncProvider.notifier).add(coursePayload);
+        if (!mounted) return;
+        AppSnackbar.success(context, 'Nouveau cours ajouté au planning !');
+      }
+      Navigator.pop(context);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _isSaving = false);
+      AppSnackbar.error(context, ApiException.fromError(e).message);
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    const subjects = MockSharedData.subjects;
+    final subjectsAsync = ref.watch(subjectsAsyncProvider);
+    final subjects = subjectsAsync.asData?.value ?? const <Subject>[];
+    final validSelectedId = subjects.any((s) => s.id == _selectedSubjectId) ? _selectedSubjectId : null;
 
     return AppScaffold(
-      title: 'Nouveau Cours',
+      title: widget.existingCourse == null ? 'Nouveau Cours' : 'Modifier le cours',
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(AppSpacing.lg),
         child: Form(
@@ -71,20 +109,41 @@ class _AddEditCourseScreenState extends ConsumerState<AddEditCourseScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              AppDropdownField<String>(
-                label: 'Matière',
-                value: _selectedSubjectId,
-                hint: 'Sélectionner la matière',
-                items: subjects.map((s) => s.id).toList(),
-                itemLabel: (id) => subjects.firstWhere((s) => s.id == id).name,
-                onChanged: (v) {
-                  setState(() {
-                    _selectedSubjectId = v;
-                    if (v != null) {
-                      _teacherCtrl.text = subjects.firstWhere((s) => s.id == v).teacher;
-                    }
-                  });
-                },
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Expanded(
+                    child: AppDropdownField<String>(
+                      label: 'Matière',
+                      value: validSelectedId,
+                      hint: subjects.isEmpty ? 'Créez d\'abord une matière →' : 'Sélectionner la matière',
+                      items: subjects.map((s) => s.id).toList(),
+                      itemLabel: (id) => subjects.firstWhere((s) => s.id == id).name,
+                      onChanged: (v) {
+                        setState(() {
+                          _selectedSubjectId = v;
+                          if (v != null) {
+                            _teacherCtrl.text = subjects.firstWhere((s) => s.id == v).teacher;
+                          }
+                        });
+                      },
+                    ),
+                  ),
+                  AppSpacing.gapXs,
+                  IconButton.filledTonal(
+                    tooltip: 'Nouvelle matière',
+                    icon: const Icon(Icons.add_rounded),
+                    onPressed: () async {
+                      final created = await showCreateSubjectSheet(context, ref);
+                      if (created != null && mounted) {
+                        setState(() {
+                          _selectedSubjectId = created.id;
+                          _teacherCtrl.text = created.teacher;
+                        });
+                      }
+                    },
+                  ),
+                ],
               ),
               AppSpacing.gapMd,
               AppDropdownField<int>(
@@ -147,6 +206,7 @@ class _AddEditCourseScreenState extends ConsumerState<AddEditCourseScreen> {
               AppButton(
                 label: 'Enregistrer le cours',
                 icon: Icons.check_rounded,
+                isLoading: _isSaving,
                 expand: true,
                 onPressed: _save,
               ),

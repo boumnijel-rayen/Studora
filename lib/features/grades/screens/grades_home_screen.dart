@@ -11,10 +11,10 @@ class GradesHomeScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final gradesAsync = ref.watch(gradesAsyncProvider);
+    final subjectsAsync = ref.watch(subjectsAsyncProvider);
     final overallAvg = ref.watch(overallAverageProvider);
     final subjectAvgs = ref.watch(subjectAveragesProvider);
-    final grades = ref.watch(gradesProvider);
-    const subjects = MockSharedData.subjects;
 
     return AppScaffold(
       title: 'Notes & Objectifs',
@@ -36,100 +36,141 @@ class GradesHomeScreen extends ConsumerWidget {
           onPressed: () => context.push(GradesRoutes.newGrade),
         ),
       ],
-      body: ListView(
-        padding: const EdgeInsets.all(AppSpacing.md),
-        children: [
-          // Carte principale : Moyenne générale
-          AppCard(
-            padding: const EdgeInsets.all(AppSpacing.lg),
-            child: Row(
-              children: [
-                AppProgressRing(
-                  value: overallAvg / 20.0,
-                  size: 100,
-                  strokeWidth: 10,
-                  color: overallAvg >= 14
-                      ? AppColors.tertiary
-                      : (overallAvg >= 10 ? AppColors.primary : AppColors.warning),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        overallAvg.toStringAsFixed(2),
-                        style: context.text.titleLarge?.copyWith(fontWeight: FontWeight.bold),
-                      ),
-                      Text('/ 20', style: context.text.labelSmall),
-                    ],
-                  ),
-                ),
-                AppSpacing.gapLg,
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text('Moyenne générale', style: context.text.titleMedium),
-                      AppSpacing.gapXxs,
-                      Text(
-                        overallAvg >= 16
-                            ? 'Mention Très Bien 🌟'
-                            : (overallAvg >= 14
-                                ? 'Mention Bien 👍'
-                                : (overallAvg >= 12 ? 'Mention Assez Bien' : 'En cours d\'acquisition')),
-                        style: context.text.bodyMedium?.copyWith(
-                          color: context.colors.primary,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      AppSpacing.gapXxs,
-                      Text('${grades.length} notes enregistrées au total', style: context.text.bodySmall),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-          AppSpacing.gapLg,
+      body: gradesAsync.when(
+        loading: () => const AppSkeletonList(),
+        error: (err, _) => AppErrorState.fromError(
+          err,
+          onRetry: () {
+            ref.invalidate(gradesAsyncProvider);
+            ref.invalidate(subjectsAsyncProvider);
+          },
+        ),
+        data: (grades) {
+          if (subjectsAsync.hasError) {
+            return AppErrorState.fromError(
+              subjectsAsync.error!,
+              onRetry: () => ref.invalidate(subjectsAsyncProvider),
+            );
+          }
+          final subjects = subjectsAsync.asData?.value ?? const <Subject>[];
 
-          // Raccourcis rapides
-          Row(
+          return ListView(
+            padding: const EdgeInsets.all(AppSpacing.md),
             children: [
-              Expanded(
-                child: AppButton(
-                  label: 'Simulateur',
-                  icon: Icons.calculate_rounded,
-                  variant: AppButtonVariant.tonal,
-                  onPressed: () => context.push(GradesRoutes.simulator),
+              // Carte principale : Moyenne générale
+              AppCard(
+                padding: const EdgeInsets.all(AppSpacing.lg),
+                child: Row(
+                  children: [
+                    AppProgressRing(
+                      value: (overallAvg / 20.0).clamp(0.0, 1.0),
+                      size: 100,
+                      strokeWidth: 10,
+                      color: overallAvg >= 14
+                          ? AppColors.tertiary
+                          : (overallAvg >= 10 ? AppColors.primary : AppColors.warning),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            grades.isEmpty ? '—' : overallAvg.toStringAsFixed(2),
+                            style: context.text.titleLarge?.copyWith(fontWeight: FontWeight.bold),
+                          ),
+                          Text('/ 20', style: context.text.labelSmall),
+                        ],
+                      ),
+                    ),
+                    AppSpacing.gapLg,
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('Moyenne générale', style: context.text.titleMedium),
+                          AppSpacing.gapXxs,
+                          Text(
+                            grades.isEmpty
+                                ? 'Aucune note saisie'
+                                : (overallAvg >= 16
+                                      ? 'Mention Très Bien 🌟'
+                                      : (overallAvg >= 14
+                                            ? 'Mention Bien 👍'
+                                            : (overallAvg >= 12
+                                                  ? 'Mention Assez Bien'
+                                                  : 'En cours d\'acquisition'))),
+                            style: context.text.bodyMedium?.copyWith(
+                              color: context.colors.primary,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          AppSpacing.gapXxs,
+                          Text('${grades.length} note${grades.length > 1 ? 's' : ''} enregistrée${grades.length > 1 ? 's' : ''} au total', style: context.text.bodySmall),
+                        ],
+                      ),
+                    ),
+                  ],
                 ),
               ),
-              AppSpacing.gapSm,
-              Expanded(
-                child: AppButton(
-                  label: 'Mes Objectifs',
-                  icon: Icons.flag_rounded,
-                  variant: AppButtonVariant.tonal,
-                  onPressed: () => context.push(GradesRoutes.goals),
-                ),
+              AppSpacing.gapLg,
+
+              // Raccourcis rapides
+              Row(
+                children: [
+                  Expanded(
+                    child: AppButton(
+                      label: 'Simulateur',
+                      icon: Icons.calculate_rounded,
+                      variant: AppButtonVariant.tonal,
+                      onPressed: () => context.push(GradesRoutes.simulator),
+                    ),
+                  ),
+                  AppSpacing.gapSm,
+                  Expanded(
+                    child: AppButton(
+                      label: 'Mes Objectifs',
+                      icon: Icons.flag_rounded,
+                      variant: AppButtonVariant.tonal,
+                      onPressed: () => context.push(GradesRoutes.goals),
+                    ),
+                  ),
+                ],
               ),
+              AppSpacing.gapLg,
+
+              // Liste des matières
+              AppSectionHeader(
+                title: 'Moyennes par matière',
+                actionLabel: 'Nouvelle matière',
+                onAction: () => showCreateSubjectSheet(context, ref),
+              ),
+
+              if (subjects.isEmpty)
+                AppCard(
+                  padding: const EdgeInsets.all(AppSpacing.xl),
+                  child: Column(
+                    children: [
+                      const Text('Aucune matière enregistrée pour le moment.'),
+                      AppSpacing.gapSm,
+                      AppButton(
+                        label: 'Ajouter une matière',
+                        size: AppButtonSize.sm,
+                        variant: AppButtonVariant.tonal,
+                        onPressed: () => showCreateSubjectSheet(context, ref),
+                      ),
+                    ],
+                  ),
+                )
+              else
+                for (final sub in subjects) ...[
+                  _SubjectGradeTile(
+                    subject: sub,
+                    average: subjectAvgs[sub.id],
+                    gradesCount: grades.where((g) => g.subjectId == sub.id).length,
+                  ),
+                  AppSpacing.gapSm,
+                ],
             ],
-          ),
-          AppSpacing.gapLg,
-
-          // Liste des matières
-          AppSectionHeader(
-            title: 'Moyennes par matière',
-            actionLabel: 'Ajouter une note',
-            onAction: () => context.push(GradesRoutes.newGrade),
-          ),
-
-          for (final sub in subjects) ...[
-            _SubjectGradeTile(
-              subject: sub,
-              average: subjectAvgs[sub.id],
-              gradesCount: grades.where((g) => g.subjectId == sub.id).length,
-            ),
-            AppSpacing.gapSm,
-          ],
-        ],
+          );
+        },
       ),
     );
   }

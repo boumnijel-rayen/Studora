@@ -16,9 +16,10 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
   final _formKey = GlobalKey<FormState>();
   final _titleCtrl = TextEditingController();
   final _amountCtrl = TextEditingController();
-  String? _paidByName = 'Rayen Ben Ali';
+  String? _paidByName;
   String _category = 'Alimentation';
   DateTime _date = DateTime.now();
+  bool _saving = false;
 
   @override
   void dispose() {
@@ -27,28 +28,61 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
     super.dispose();
   }
 
-  void _save() {
-    if (!_formKey.currentState!.validate() || _paidByName == null) return;
+  List<String> _buildCandidateNames() {
+    final roommates = ref.watch(roommatesProvider);
+    final user = ref.watch(currentUserProvider);
+    return <String>{
+      if (user != null && user.fullName.trim().isNotEmpty) user.fullName.trim(),
+      for (final r in roommates)
+        if (r.name.trim().isNotEmpty) r.name.trim(),
+    }.toList();
+  }
 
-    final amount = double.tryParse(_amountCtrl.text.replaceAll(',', '.').trim()) ?? 0.0;
+  Future<void> _save() async {
+    final candidates = _buildCandidateNames();
+    final payer = _paidByName ?? (candidates.isNotEmpty ? candidates.first : null);
+    if (!_formKey.currentState!.validate() || payer == null) return;
 
-    final newExp = Expense(
-      id: 'exp-${DateTime.now().millisecondsSinceEpoch}',
-      title: _titleCtrl.text.trim(),
-      amount: amount,
-      paidByName: _paidByName!,
-      date: _date,
-      category: _category,
-    );
+    setState(() => _saving = true);
+    try {
+      final amount = double.tryParse(_amountCtrl.text.replaceAll(',', '.').trim()) ?? 0.0;
 
-    ref.read(expensesProvider.notifier).add(newExp);
-    AppSnackbar.success(context, 'Dépense de ${amount.toStringAsFixed(2)} € enregistrée !');
-    Navigator.pop(context);
+      final newExp = Expense(
+        id: '',
+        title: _titleCtrl.text.trim(),
+        amount: amount,
+        paidByName: payer,
+        date: _date,
+        category: _category,
+      );
+
+      await ref.read(expensesAsyncProvider.notifier).add(newExp);
+      if (!mounted) return;
+      final currency = ref.read(preferencesProvider).currency;
+      AppSnackbar.success(
+        context,
+        'Dépense de ${Formatters.money(amount, symbol: currency)} enregistrée !',
+      );
+      Navigator.pop(context);
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      AppSnackbar.error(context, e.message);
+    } catch (_) {
+      if (!mounted) return;
+      AppSnackbar.error(context, 'Impossible d\'enregistrer la dépense.');
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    final roommates = ref.watch(roommatesProvider);
+    final candidates = _buildCandidateNames();
+    final effectivePayer =
+        (_paidByName != null && candidates.contains(_paidByName))
+        ? _paidByName
+        : (candidates.isNotEmpty ? candidates.first : null);
+    final currency = ref.watch(preferencesProvider).currency;
 
     return AppScaffold(
       title: 'Nouvelle dépense',
@@ -62,13 +96,13 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
               AppTextField(
                 controller: _titleCtrl,
                 label: 'Description de la dépense',
-                hint: 'ex: Courses Monoprix, Sacs poubelles, Détergent...',
+                hint: 'ex: Courses supermarché, Sacs poubelles, Détergent...',
                 validator: Validators.required(),
               ),
               AppSpacing.gapMd,
               AppTextField(
                 controller: _amountCtrl,
-                label: 'Montant total payé (€)',
+                label: 'Montant total payé ($currency)',
                 hint: 'ex: 45.80',
                 keyboardType: const TextInputType.numberWithOptions(decimal: true),
                 validator: Validators.compose([
@@ -79,24 +113,23 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
               AppSpacing.gapMd,
               AppDropdownField<String>(
                 label: 'Payé par',
-                value: _paidByName,
-                items: roommates.map((r) => r.name).toList(),
+                value: effectivePayer,
+                items: candidates,
                 itemLabel: (name) => name,
                 onChanged: (v) => setState(() => _paidByName = v),
               ),
               AppSpacing.gapMd,
               const Text('Catégorie', style: TextStyle(fontWeight: FontWeight.w600)),
               AppSpacing.gapXs,
-              Row(
+              Wrap(
+                spacing: AppSpacing.xs,
                 children: [
-                  for (final cat in ['Alimentation', 'Factures', 'Ménage', 'Autre']) ...[
+                  for (final cat in ['Alimentation', 'Factures', 'Ménage', 'Autre'])
                     ChoiceChip(
                       label: Text(cat),
                       selected: _category == cat,
                       onSelected: (_) => setState(() => _category = cat),
                     ),
-                    AppSpacing.gapXs,
-                  ],
                 ],
               ),
               AppSpacing.gapMd,
@@ -109,6 +142,7 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
               AppButton(
                 label: 'Enregistrer la dépense',
                 icon: Icons.check_rounded,
+                isLoading: _saving,
                 expand: true,
                 onPressed: _save,
               ),

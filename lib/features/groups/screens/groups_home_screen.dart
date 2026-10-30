@@ -26,16 +26,8 @@ class _GroupsHomeScreenState extends ConsumerState<GroupsHomeScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final allGroups = ref.watch(groupsProvider);
+    final groupsAsync = ref.watch(groupsAsyncProvider);
     final query = _searchCtrl.text.trim().toLowerCase();
-
-    final filtered = allGroups.where((g) {
-      final matchesQuery = query.isEmpty ||
-          g.name.toLowerCase().contains(query) ||
-          g.subjectName.toLowerCase().contains(query);
-      final matchesTab = _tabIndex == 0 ? g.isJoined : !g.isJoined;
-      return matchesQuery && matchesTab;
-    }).toList();
 
     return AppScaffold(
       title: 'Groupes d\'étude',
@@ -52,55 +44,72 @@ class _GroupsHomeScreenState extends ConsumerState<GroupsHomeScreen> {
           onPressed: () => context.push(GroupsRoutes.newGroup),
         ),
       ],
-      body: ListView(
-        padding: const EdgeInsets.all(AppSpacing.md),
-        children: [
-          AppSearchField(
-            controller: _searchCtrl,
-            hint: 'Rechercher un groupe ou une matière...',
-            onChanged: (_) => setState(() {}),
-          ),
-          AppSpacing.gapMd,
+      body: groupsAsync.when(
+        loading: () => const AppSkeletonList(),
+        error: (err, _) => AppErrorState.fromError(
+          err,
+          onRetry: () => ref.invalidate(groupsAsyncProvider),
+        ),
+        data: (allGroups) {
+          final filtered = allGroups.where((g) {
+            final matchesQuery = query.isEmpty ||
+                g.name.toLowerCase().contains(query) ||
+                g.subjectName.toLowerCase().contains(query);
+            final matchesTab = _tabIndex == 0 ? g.isJoined : !g.isJoined;
+            return matchesQuery && matchesTab;
+          }).toList();
 
-          AppSegmentedControl<int>(
-            segments: const {0: 'Mes groupes', 1: 'Découvrir'},
-            selected: _tabIndex,
-            onChanged: (i) => setState(() => _tabIndex = i),
-          ),
-          AppSpacing.gapLg,
-
-          if (filtered.isEmpty)
-            AppCard(
-              padding: const EdgeInsets.all(AppSpacing.xl),
-              child: Center(
-                child: Column(
-                  children: [
-                    Icon(Icons.group_off_rounded, size: 48, color: context.colors.textSecondary),
-                    AppSpacing.gapMd,
-                    Text(
-                      _tabIndex == 0
-                          ? 'Vous n\'avez pas encore rejoint de groupe'
-                          : 'Aucun groupe disponible pour cette recherche',
-                      style: context.text.titleSmall,
-                      textAlign: TextAlign.center,
-                    ),
-                    AppSpacing.gapSm,
-                    AppButton(
-                      label: 'Rejoindre via un code d\'invitation',
-                      variant: AppButtonVariant.tonal,
-                      size: AppButtonSize.sm,
-                      onPressed: () => context.push(GroupsRoutes.join),
-                    ),
-                  ],
-                ),
+          return ListView(
+            padding: const EdgeInsets.all(AppSpacing.md),
+            children: [
+              AppSearchField(
+                controller: _searchCtrl,
+                hint: 'Rechercher un groupe ou une matière...',
+                onChanged: (_) => setState(() {}),
               ),
-            )
-          else
-            for (final g in filtered) ...[
-              _GroupCard(group: g),
-              AppSpacing.gapSm,
+              AppSpacing.gapMd,
+
+              AppSegmentedControl<int>(
+                segments: const {0: 'Mes groupes', 1: 'Découvrir'},
+                selected: _tabIndex,
+                onChanged: (i) => setState(() => _tabIndex = i),
+              ),
+              AppSpacing.gapLg,
+
+              if (filtered.isEmpty)
+                AppCard(
+                  padding: const EdgeInsets.all(AppSpacing.xl),
+                  child: Center(
+                    child: Column(
+                      children: [
+                        Icon(Icons.group_off_rounded, size: 48, color: context.colors.textSecondary),
+                        AppSpacing.gapMd,
+                        Text(
+                          _tabIndex == 0
+                              ? 'Vous n\'avez pas encore rejoint de groupe'
+                              : 'Aucun groupe disponible pour cette recherche',
+                          style: context.text.titleSmall,
+                          textAlign: TextAlign.center,
+                        ),
+                        AppSpacing.gapSm,
+                        AppButton(
+                          label: 'Rejoindre via un code d\'invitation',
+                          variant: AppButtonVariant.tonal,
+                          size: AppButtonSize.sm,
+                          onPressed: () => context.push(GroupsRoutes.join),
+                        ),
+                      ],
+                    ),
+                  ),
+                )
+              else
+                for (final g in filtered) ...[
+                  _GroupCard(group: g),
+                  AppSpacing.gapSm,
+                ],
             ],
-        ],
+          );
+        },
       ),
     );
   }
@@ -136,7 +145,7 @@ class _GroupCard extends StatelessWidget {
               AppAvatarStack(names: group.memberNames, size: 28),
               AppSpacing.gapSm,
               Text(
-                '${group.memberNames.length} membres',
+                '${group.memberNames.length} membre${group.memberNames.length > 1 ? 's' : ''}',
                 style: context.text.labelSmall?.copyWith(color: context.colors.textSecondary),
               ),
               const Spacer(),

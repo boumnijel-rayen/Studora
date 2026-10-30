@@ -21,6 +21,7 @@ class _AddEditDeadlineScreenState extends ConsumerState<AddEditDeadlineScreen> {
   DeadlineType _type = DeadlineType.homework;
   Priority _priority = Priority.medium;
   int _reminder = 30;
+  bool _isSaving = false;
 
   @override
   void dispose() {
@@ -29,18 +30,23 @@ class _AddEditDeadlineScreenState extends ConsumerState<AddEditDeadlineScreen> {
     super.dispose();
   }
 
-  void _save() {
+  Future<void> _save() async {
+    if (_isSaving) return;
+    final subjects = ref.read(subjectsProvider);
     if (!_formKey.currentState!.validate() || _selectedSubjectId == null) {
       if (_selectedSubjectId == null) {
-        AppSnackbar.error(context, 'Veuillez sélectionner une matière');
+        AppSnackbar.error(context, 'Veuillez sélectionner ou créer une matière');
       }
       return;
     }
 
-    final subject = MockSharedData.subjects.firstWhere((s) => s.id == _selectedSubjectId);
+    final subject = subjects.where((s) => s.id == _selectedSubjectId).firstOrNull;
+    if (subject == null) return;
+
+    setState(() => _isSaving = true);
 
     final deadline = Deadline(
-      id: 'd-${DateTime.now().millisecondsSinceEpoch}',
+      id: '',
       title: _titleCtrl.text.trim(),
       subjectId: subject.id,
       subjectName: subject.name,
@@ -51,22 +57,32 @@ class _AddEditDeadlineScreenState extends ConsumerState<AddEditDeadlineScreen> {
       reminderBeforeMinutes: _reminder,
     );
 
-    ref.read(deadlinesProvider.notifier).add(deadline);
+    try {
+      final created = await ref.read(deadlinesAsyncProvider.notifier).add(deadline);
 
-    // Ajoute également une notification dans le centre de notifications
-    ref.read(notificationsProvider.notifier).push(
-      title: 'Échéance créée : ${deadline.title}',
-      body: 'À rendre le ${Formatters.shortDate(deadline.dueDate)} en ${deadline.subjectName}.',
-      category: NotificationCategory.deadline,
-    );
+      // Enregistre également la notification de rappel dans Strapi
+      try {
+        await ref.read(notificationsAsyncProvider.notifier).push(
+          title: 'Échéance créée : ${created.title}',
+          body: 'À rendre le ${Formatters.shortDate(created.dueDate)} en ${created.subjectName}.',
+          category: NotificationCategory.deadline,
+        );
+      } catch (_) {}
 
-    AppSnackbar.success(context, 'Échéance enregistrée avec succès !');
-    Navigator.pop(context);
+      if (!mounted) return;
+      AppSnackbar.success(context, 'Échéance enregistrée avec succès !');
+      Navigator.pop(context);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _isSaving = false);
+      AppSnackbar.error(context, ApiException.fromError(e).message);
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    const subjects = MockSharedData.subjects;
+    final subjects = ref.watch(subjectsProvider);
+    final validSelectedId = subjects.any((s) => s.id == _selectedSubjectId) ? _selectedSubjectId : null;
 
     return AppScaffold(
       title: 'Nouvelle Échéance',
@@ -84,13 +100,31 @@ class _AddEditDeadlineScreenState extends ConsumerState<AddEditDeadlineScreen> {
                 validator: Validators.required(),
               ),
               AppSpacing.gapMd,
-              AppDropdownField<String>(
-                label: 'Matière concernée',
-                value: _selectedSubjectId,
-                hint: 'Sélectionner une matière',
-                items: subjects.map((s) => s.id).toList(),
-                itemLabel: (id) => subjects.firstWhere((s) => s.id == id).name,
-                onChanged: (v) => setState(() => _selectedSubjectId = v),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Expanded(
+                    child: AppDropdownField<String>(
+                      label: 'Matière concernée',
+                      value: validSelectedId,
+                      hint: subjects.isEmpty ? 'Créez d\'abord une matière →' : 'Sélectionner une matière',
+                      items: subjects.map((s) => s.id).toList(),
+                      itemLabel: (id) => subjects.firstWhere((s) => s.id == id).name,
+                      onChanged: (v) => setState(() => _selectedSubjectId = v),
+                    ),
+                  ),
+                  AppSpacing.gapXs,
+                  IconButton.filledTonal(
+                    tooltip: 'Nouvelle matière',
+                    icon: const Icon(Icons.add_rounded),
+                    onPressed: () async {
+                      final created = await showCreateSubjectSheet(context, ref);
+                      if (created != null && mounted) {
+                        setState(() => _selectedSubjectId = created.id);
+                      }
+                    },
+                  ),
+                ],
               ),
               AppSpacing.gapMd,
               AppDateField(
@@ -153,6 +187,7 @@ class _AddEditDeadlineScreenState extends ConsumerState<AddEditDeadlineScreen> {
               AppButton(
                 label: 'Ajouter au planning',
                 icon: Icons.check_rounded,
+                isLoading: _isSaving,
                 expand: true,
                 onPressed: _save,
               ),

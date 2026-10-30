@@ -12,9 +12,9 @@ class StudyHomeScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final sessions = ref.watch(studySessionsProvider);
-    final tasks = ref.watch(studyTasksProvider);
-    final completedTasks = tasks.where((t) => t.isCompleted).length;
+    final sessionsAsync = ref.watch(studySessionsAsyncProvider);
+    final tasksAsync = ref.watch(studyTasksAsyncProvider);
+    final pomodoroCfg = ref.watch(pomodoroConfigProvider);
     final (minutesToday, sessionsCount) = ref.watch(todayStudyStatsProvider);
 
     return AppScaffold(
@@ -32,98 +32,119 @@ class StudyHomeScreen extends ConsumerWidget {
           onPressed: () => context.push(StudyRoutes.tasks),
         ),
       ],
-      body: ListView(
-        padding: const EdgeInsets.all(AppSpacing.md),
-        children: [
-          // Bannière Minuteur Pomodoro
-          AppCard(
-            gradient: AppColors.focusGradient,
-            padding: const EdgeInsets.all(AppSpacing.lg),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Minuteur Pomodoro',
-                        style: context.text.titleLarge?.copyWith(color: Colors.white),
-                      ),
-                      AppSpacing.gapXxs,
-                      Text(
-                        '25 min de concentration intense + 5 min de pause',
-                        style: context.text.bodyMedium?.copyWith(color: Colors.white70),
-                      ),
-                      AppSpacing.gapMd,
-                      AppButton(
-                        label: 'Lancer une session',
-                        icon: Icons.play_arrow_rounded,
-                        variant: AppButtonVariant.secondary,
-                        onPressed: () => context.push(StudyRoutes.pomodoro),
-                      ),
-                    ],
-                  ),
-                ),
-                AppSpacing.gapSm,
-                Container(
-                  width: 64,
-                  height: 64,
-                  decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.2),
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Icon(Icons.timer_rounded, size: 36, color: Colors.white),
-                ),
-              ],
-            ),
-          ),
-          AppSpacing.gapLg,
+      body: sessionsAsync.when(
+        loading: () => const AppSkeletonList(),
+        error: (err, _) => AppErrorState.fromError(
+          err,
+          onRetry: () {
+            ref.invalidate(studySessionsAsyncProvider);
+            ref.invalidate(studyTasksAsyncProvider);
+          },
+        ),
+        data: (sessions) {
+          if (tasksAsync.hasError) {
+            return AppErrorState.fromError(
+              tasksAsync.error!,
+              onRetry: () => ref.invalidate(studyTasksAsyncProvider),
+            );
+          }
+          final tasks = tasksAsync.asData?.value ?? const <StudyTask>[];
+          final completedTasks = tasks.where((t) => t.isCompleted).length;
 
-          // Statistiques rapides
-          Row(
+          return ListView(
+            padding: const EdgeInsets.all(AppSpacing.md),
             children: [
-              Expanded(
-                child: AppStatCard(
-                  label: 'Temps de focus',
-                  value: '${(minutesToday / 60).toStringAsFixed(1)} h',
-                  icon: Icons.timelapse_rounded,
-                  color: AppColors.moduleStudy,
-                  caption: '$sessionsCount terminées',
+              // Bannière Minuteur Pomodoro
+              AppCard(
+                gradient: AppColors.focusGradient,
+                padding: const EdgeInsets.all(AppSpacing.lg),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Minuteur Pomodoro',
+                            style: context.text.titleLarge?.copyWith(color: Colors.white),
+                          ),
+                          AppSpacing.gapXxs,
+                          Text(
+                            '${pomodoroCfg.workMinutes} min de concentration intense + ${pomodoroCfg.shortBreakMinutes} min de pause',
+                            style: context.text.bodyMedium?.copyWith(color: Colors.white70),
+                          ),
+                          AppSpacing.gapMd,
+                          AppButton(
+                            label: 'Lancer une session',
+                            icon: Icons.play_arrow_rounded,
+                            variant: AppButtonVariant.secondary,
+                            onPressed: () => context.push(StudyRoutes.pomodoro),
+                          ),
+                        ],
+                      ),
+                    ),
+                    AppSpacing.gapSm,
+                    Container(
+                      width: 64,
+                      height: 64,
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.2),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(Icons.timer_rounded, size: 36, color: Colors.white),
+                    ),
+                  ],
                 ),
               ),
-              AppSpacing.gapSm,
-              Expanded(
-                child: AppStatCard(
-                  label: 'Tâches validées',
-                  value: '$completedTasks / ${tasks.length}',
-                  icon: Icons.task_alt_rounded,
-                  color: AppColors.tertiary,
-                  caption: '${((completedTasks / (tasks.isEmpty ? 1 : tasks.length)) * 100).toInt()}% accompli',
-                  onTap: () => context.push(StudyRoutes.tasks),
-                ),
+              AppSpacing.gapLg,
+
+              // Statistiques rapides
+              Row(
+                children: [
+                  Expanded(
+                    child: AppStatCard(
+                      label: 'Temps de focus',
+                      value: '${(minutesToday / 60).toStringAsFixed(1)} h',
+                      icon: Icons.timelapse_rounded,
+                      color: AppColors.moduleStudy,
+                      caption: '$sessionsCount terminées',
+                    ),
+                  ),
+                  AppSpacing.gapSm,
+                  Expanded(
+                    child: AppStatCard(
+                      label: 'Tâches validées',
+                      value: '$completedTasks / ${tasks.length}',
+                      icon: Icons.task_alt_rounded,
+                      color: AppColors.tertiary,
+                      caption: '${((completedTasks / (tasks.isEmpty ? 1 : tasks.length)) * 100).toInt()}% accompli',
+                      onTap: () => context.push(StudyRoutes.tasks),
+                    ),
+                  ),
+                ],
               ),
-            ],
-          ),
-          AppSpacing.gapLg,
+              AppSpacing.gapLg,
 
-          // En-tête des sessions planifiées
-          AppSectionHeader(
-            title: 'Sessions de révision (${sessions.length})',
-            actionLabel: 'Planifier',
-            onAction: () => context.push(StudyRoutes.newSession),
-          ),
+              // En-tête des sessions planifiées
+              AppSectionHeader(
+                title: 'Sessions de révision (${sessions.length})',
+                actionLabel: 'Planifier',
+                onAction: () => context.push(StudyRoutes.newSession),
+              ),
 
-          if (sessions.isEmpty)
-            const AppCard(
-              padding: EdgeInsets.all(AppSpacing.xl),
-              child: Center(child: Text('Aucune session programmée')),
-            )
-          else
-            for (final s in sessions) ...[
-              _SessionCard(session: s),
-              AppSpacing.gapSm,
+              if (sessions.isEmpty)
+                const AppCard(
+                  padding: EdgeInsets.all(AppSpacing.xl),
+                  child: Center(child: Text('Aucune session programmée')),
+                )
+              else
+                for (final s in sessions) ...[
+                  _SessionCard(session: s),
+                  AppSpacing.gapSm,
+                ],
             ],
-        ],
+          );
+        },
       ),
     );
   }
@@ -142,8 +163,14 @@ class _SessionCard extends ConsumerWidget {
         children: [
           Checkbox(
             value: session.isCompleted,
-            onChanged: (_) {
-              ref.read(studySessionsProvider.notifier).toggleCompleted(session.id);
+            onChanged: (_) async {
+              try {
+                await ref.read(studySessionsAsyncProvider.notifier).toggleCompleted(session.id);
+              } catch (e) {
+                if (context.mounted) {
+                  AppSnackbar.error(context, ApiException.fromError(e).message);
+                }
+              }
             },
           ),
           AppSpacing.gapSm,
@@ -168,10 +195,10 @@ class _SessionCard extends ConsumerWidget {
                     decoration: session.isCompleted ? TextDecoration.lineThrough : null,
                   ),
                 ),
-                if (session.linkedDeadlineTitle != null) ...[
+                if (session.linkedDeadlineTitle != null && session.linkedDeadlineTitle!.isNotEmpty) ...[
                   const SizedBox(height: 2),
                   Text(
-                    'Échéance : ${session.linkedDeadlineTitle}',
+                    'Objectif / Tâche : ${session.linkedDeadlineTitle}',
                     style: context.text.bodySmall?.copyWith(color: context.colors.textSecondary),
                   ),
                 ],
@@ -180,7 +207,15 @@ class _SessionCard extends ConsumerWidget {
           ),
           IconButton(
             icon: const Icon(Icons.delete_outline_rounded, size: 20),
-            onPressed: () => ref.read(studySessionsProvider.notifier).delete(session.id),
+            onPressed: () async {
+              try {
+                await ref.read(studySessionsAsyncProvider.notifier).delete(session.id);
+              } catch (e) {
+                if (context.mounted) {
+                  AppSnackbar.error(context, ApiException.fromError(e).message);
+                }
+              }
+            },
           ),
         ],
       ),

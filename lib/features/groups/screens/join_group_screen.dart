@@ -22,6 +22,7 @@ class _JoinGroupScreenState extends ConsumerState<JoinGroupScreen> {
   }
 
   Future<void> _join() async {
+    if (_isLoading) return;
     final code = _codeCtrl.text.trim();
     if (code.isEmpty) {
       AppSnackbar.error(context, 'Veuillez saisir un code de groupe');
@@ -29,12 +30,16 @@ class _JoinGroupScreenState extends ConsumerState<JoinGroupScreen> {
     }
 
     setState(() => _isLoading = true);
-    await Future<void>.delayed(const Duration(milliseconds: 600));
-    if (!mounted) return;
-
-    ref.read(groupsProvider.notifier).joinGroup(code);
-    AppSnackbar.success(context, 'Vous avez rejoint le groupe d\'étude avec succès !');
-    Navigator.pop(context);
+    try {
+      final group = await ref.read(groupsAsyncProvider.notifier).joinGroup(code);
+      if (!mounted) return;
+      AppSnackbar.success(context, 'Vous avez rejoint « ${group.name} » avec succès !');
+      Navigator.pop(context);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _isLoading = false);
+      AppSnackbar.error(context, ApiException.fromError(e).message);
+    }
   }
 
   @override
@@ -61,7 +66,7 @@ class _JoinGroupScreenState extends ConsumerState<JoinGroupScreen> {
                     children: [
                       Text('Code d\'invitation', style: context.text.titleSmall),
                       Text(
-                        'Demandez le code à 6 caractères à l\'un des membres du groupe.',
+                        'Demandez le code d\'accès à l\'un des membres du groupe.',
                         style: context.text.bodySmall,
                       ),
                     ],
@@ -75,8 +80,9 @@ class _JoinGroupScreenState extends ConsumerState<JoinGroupScreen> {
           AppTextField(
             controller: _codeCtrl,
             label: 'Code du groupe',
-            hint: 'ex: ALGO42 ou MATH99',
+            hint: 'ex: ALG104',
             prefixIcon: Icons.key_rounded,
+            onSubmitted: (_) => _join(),
           ),
           AppSpacing.gapLg,
 

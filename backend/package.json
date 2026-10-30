@@ -1,0 +1,30 @@
+{
+  "name": "studora-backend",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Backend Strapi 5 de l'application Studora (authentification, données par utilisateur, groupes, colocation).",
+  "scripts": {
+    "setup:env": "node scripts/setup-env.js",
+    "develop": "strapi develop",
+    "dev": "strapi develop",
+    "start": "strapi start",
+    "build": "strapi build",
+    "strapi": "strapi",
+    "test": "node --test tests/"
+  },
+  "dependencies": {
+    "@strapi/plugin-users-permissions": "^5.12.0",
+    "@strapi/strapi": "^5.12.0",
+    "better-sqlite3": "^11.8.1",
+    "pg": "^8.13.1",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-router-dom": "^6.28.0",
+    "styled-components": "^6.1.13"
+  },
+  "engines": {
+    "node": ">=18.0.0 <=22.x.x",
+    "npm": ">=6.0.0"
+  }
+}
+

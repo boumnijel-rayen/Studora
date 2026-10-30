@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../design_system/tokens/app_colors.dart';
+import '../network/strapi_client.dart';
+import 'session_service.dart';
 
 /// Catégorie de notification (détermine icône et couleur).
 enum NotificationCategory {
@@ -16,6 +18,16 @@ enum NotificationCategory {
   const NotificationCategory(this.icon, this.color);
   final IconData icon;
   final Color color;
+
+  static NotificationCategory fromString(String value) => switch (value) {
+    'course' => NotificationCategory.course,
+    'deadline' => NotificationCategory.deadline,
+    'study' => NotificationCategory.study,
+    'group' => NotificationCategory.group,
+    'grade' => NotificationCategory.grade,
+    'roommate' => NotificationCategory.roommate,
+    _ => NotificationCategory.system,
+  };
 }
 
 @immutable
@@ -30,6 +42,16 @@ class AppNotification {
     this.route,
   });
 
+  factory AppNotification.fromJson(Map<String, dynamic> json) => AppNotification(
+    id: (json['id'] ?? json['documentId'] ?? '').toString(),
+    title: (json['title'] ?? '').toString(),
+    body: (json['body'] ?? '').toString(),
+    date: DateTime.tryParse((json['date'] ?? '').toString()) ?? DateTime.now(),
+    category: NotificationCategory.fromString((json['category'] ?? 'system').toString()),
+    read: json['read'] == true,
+    route: json['route']?.toString(),
+  );
+
   final String id;
   final String title;
   final String body;
@@ -39,6 +61,15 @@ class AppNotification {
 
   /// Route à ouvrir au toucher (optionnelle).
   final String? route;
+
+  Map<String, dynamic> toJson() => {
+    'title': title,
+    'body': body,
+    'date': date.toUtc().toIso8601String(),
+    'category': category.name,
+    'read': read,
+    if (route != null) 'route': route,
+  };
 
   AppNotification copyWith({bool? read}) => AppNotification(
     id: id,
@@ -51,68 +82,78 @@ class AppNotification {
   );
 }
 
-/// Service de notifications **simulé** (en mémoire, aucune notification système).
-///
-/// Les modules publient : `ref.read(notificationsProvider.notifier).push(...)`.
-/// Le module Planning affiche le centre de notifications.
-class NotificationsNotifier extends Notifier<List<AppNotification>> {
-  int _seq = 100;
-
+/// Gestionnaire des notifications connecté à Strapi (`/api/app-notifications`).
+class NotificationsAsyncNotifier extends AsyncNotifier<List<AppNotification>> {
   @override
-  List<AppNotification> build() {
-    final now = DateTime.now();
-    return [
-      AppNotification(
-        id: 'n-1',
-        title: 'Partiel de Mathématiques demain',
-        body: 'Amphi B — 9h00. Pensez à réviser les intégrales !',
-        date: now.subtract(const Duration(minutes: 25)),
-        category: NotificationCategory.deadline,
-      ),
-      AppNotification(
-        id: 'n-2',
-        title: 'Nouveau message — Team Algo',
-        body: 'Inès : « Quelqu\'un a fini l\'exercice 4 ? »',
-        date: now.subtract(const Duration(hours: 2)),
-        category: NotificationCategory.group,
-      ),
-      AppNotification(
-        id: 'n-3',
-        title: 'C\'est ton tour : sortir les poubelles',
-        body: 'Tâche de colocation assignée pour aujourd\'hui.',
-        date: now.subtract(const Duration(hours: 5)),
-        category: NotificationCategory.roommate,
-        read: true,
-      ),
-    ];
+  Future<List<AppNotification>> build() async {
+    final user = ref.watch(currentUserProvider);
+    if (user == null) return const [];
+
+    final client = ref.read(strapiClientProvider);
+    final list = await client.getList(
+      '/app-notifications',
+      queryParameters: {'sort': 'date:desc'},
+    );
+    return list.map(AppNotification.fromJson).toList();
   }
 
-  void push({
+  Future<AppNotification> push({
     required String title,
     required String body,
     required NotificationCategory category,
     String? route,
-  }) {
-    state = [
-      AppNotification(
-        id: 'n-${_seq++}',
-        title: title,
-        body: body,
-        date: DateTime.now(),
-        category: category,
-        route: route,
-      ),
-      ...state,
-    ];
+  }) async {
+    final client = ref.read(strapiClientProvider);
+    final response = await client.post(
+      '/app-notifications',
+      body: {
+        'title': title,
+        'body': body,
+        'date': DateTime.now().toUtc().toIso8601String(),
+        'category': category.name,
+        'read': false,
+        if (route != null) 'route': route,
+      },
+    );
+    final created = AppNotification.fromJson(StrapiClient.unwrapMap(response));
+    final current = state.asData?.value ?? const <AppNotification>[];
+    state = AsyncData([created, ...current]);
+    return created;
   }
 
-  void markRead(String id) => state = [for (final n in state) n.id == id ? n.copyWith(read: true) : n];
-  void markAllRead() => state = [for (final n in state) n.copyWith(read: true)];
-  void remove(String id) => state = state.where((n) => n.id != id).toList();
+  Future<void> markRead(String id) async {
+    final client = ref.read(strapiClientProvider);
+    await client.put('/app-notifications/$id', body: {'read': true});
+    final current = state.asData?.value ?? const <AppNotification>[];
+    state = AsyncData([
+      for (final n in current) n.id == id ? n.copyWith(read: true) : n,
+    ]);
+  }
+
+  Future<void> markAllRead() async {
+    final client = ref.read(strapiClientProvider);
+    await client.post('/app-notifications/mark-all-read', body: const {});
+    final current = state.asData?.value ?? const <AppNotification>[];
+    state = AsyncData([
+      for (final n in current) n.copyWith(read: true),
+    ]);
+  }
+
+  Future<void> remove(String id) async {
+    final client = ref.read(strapiClientProvider);
+    await client.delete('/app-notifications/$id');
+    final current = state.asData?.value ?? const <AppNotification>[];
+    state = AsyncData(current.where((n) => n.id != id).toList());
+  }
 }
 
-final notificationsProvider = NotifierProvider<NotificationsNotifier, List<AppNotification>>(
-  NotificationsNotifier.new,
+final notificationsAsyncProvider =
+    AsyncNotifierProvider<NotificationsAsyncNotifier, List<AppNotification>>(
+      NotificationsAsyncNotifier.new,
+    );
+
+final notificationsProvider = Provider<List<AppNotification>>(
+  (ref) => ref.watch(notificationsAsyncProvider).asData?.value ?? const [],
 );
 
 final unreadNotificationsCountProvider = Provider<int>(

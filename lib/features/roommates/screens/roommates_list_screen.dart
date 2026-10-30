@@ -11,11 +11,12 @@ class RoommatesListScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final roommates = ref.watch(roommatesProvider);
+    final roommatesAsync = ref.watch(roommatesAsyncProvider);
+    final roommates = roommatesAsync.value ?? const [];
 
     return AppScaffold(
       title: 'Colocataires',
-      subtitle: '${roommates.length} personnes dans le logement',
+      subtitle: '${roommates.length} personne${roommates.length > 1 ? 's' : ''} dans le logement',
       actions: [
         IconButton(
           tooltip: 'Nouveau colocataire',
@@ -23,45 +24,90 @@ class RoommatesListScreen extends ConsumerWidget {
           onPressed: () => context.push(RoommatesRoutes.newRoommate),
         ),
       ],
-      body: ListView.separated(
-        padding: const EdgeInsets.all(AppSpacing.md),
-        itemCount: roommates.length,
-        separatorBuilder: (_, _) => AppSpacing.gapSm,
-        itemBuilder: (context, i) {
-          final r = roommates[i];
-          return AppCard(
-            child: Row(
-              children: [
-                AppAvatar(name: r.name, size: 48, showOnline: r.isPresent),
-                AppSpacing.gapMd,
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Text(r.name, style: context.text.titleSmall),
-                          AppSpacing.gapXs,
-                          AppBadge(
-                            label: r.isPresent ? 'À l\'appart' : 'Absent',
-                            tone: r.isPresent ? AppBadgeTone.success : AppBadgeTone.neutral,
+      body: AppAsyncView(
+        value: roommatesAsync,
+        isEmpty: (items) => items.isEmpty,
+        empty: AppEmptyState(
+          icon: Icons.people_outline_rounded,
+          title: 'Aucun colocataire',
+          message: 'Ajoutez les membres de votre colocation pour partager les tâches et dépenses.',
+          actionLabel: 'Ajouter un colocataire',
+          onAction: () => context.push(RoommatesRoutes.newRoommate),
+        ),
+        onRetry: () => ref.read(roommatesAsyncProvider.notifier).refresh(),
+        data: (items) => ListView.separated(
+          padding: const EdgeInsets.all(AppSpacing.md),
+          itemCount: items.length,
+          separatorBuilder: (_, _) => AppSpacing.gapSm,
+          itemBuilder: (context, i) {
+            final r = items[i];
+            return AppCard(
+              child: Row(
+                children: [
+                  AppAvatar(name: r.name, size: 48, showOnline: r.isPresent),
+                  AppSpacing.gapMd,
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Flexible(
+                              child: Text(
+                                r.name,
+                                style: context.text.titleSmall,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                            AppSpacing.gapXs,
+                            GestureDetector(
+                              onTap: () => ref
+                                  .read(roommatesAsyncProvider.notifier)
+                                  .togglePresence(r.id),
+                              child: AppBadge(
+                                label: r.isPresent ? 'À l\'appart' : 'Absent',
+                                tone: r.isPresent ? AppBadgeTone.success : AppBadgeTone.neutral,
+                              ),
+                            ),
+                          ],
+                        ),
+                        AppSpacing.gapXxs,
+                        Text('${r.roomNumber} • ${r.phone}', style: context.text.bodySmall),
+                        Text(
+                          r.email,
+                          style: context.text.bodySmall?.copyWith(
+                            color: context.colors.textSecondary,
                           ),
-                        ],
-                      ),
-                      AppSpacing.gapXxs,
-                      Text('${r.roomNumber} • ${r.phone}', style: context.text.bodySmall),
-                      Text(r.email, style: context.text.bodySmall?.copyWith(color: context.colors.textSecondary)),
-                    ],
+                        ),
+                      ],
+                    ),
                   ),
-                ),
-                IconButton(
-                  icon: const Icon(Icons.phone_outlined, color: AppColors.primary),
-                  onPressed: () => AppSnackbar.info(context, 'Appel vers ${r.phone} simulé'),
-                ),
-              ],
-            ),
-          );
-        },
+                  IconButton(
+                    tooltip: 'Supprimer',
+                    icon: const Icon(Icons.delete_outline_rounded, size: 20),
+                    onPressed: () async {
+                      try {
+                        await ref.read(roommatesAsyncProvider.notifier).delete(r.id);
+                        if (context.mounted) {
+                          AppSnackbar.info(context, 'Colocataire retiré');
+                        }
+                      } catch (e) {
+                        if (context.mounted) {
+                          AppSnackbar.error(
+                            context,
+                            e is ApiException
+                                ? e.message
+                                : 'Impossible de supprimer ce colocataire.',
+                          );
+                        }
+                      }
+                    },
+                  ),
+                ],
+              ),
+            );
+          },
+        ),
       ),
     );
   }

@@ -21,19 +21,20 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
   late final TextEditingController _bioCtrl;
   late int _year;
   bool _isLoading = false;
+  String? _errorMessage;
 
   @override
   void initState() {
     super.initState();
-    final u = ref.read(currentUserProvider) ?? MockSharedData.demoUser;
-    _firstNameCtrl = TextEditingController(text: u.firstName);
-    _lastNameCtrl = TextEditingController(text: u.lastName);
-    _emailCtrl = TextEditingController(text: u.email);
-    _phoneCtrl = TextEditingController(text: u.phone);
-    _universityCtrl = TextEditingController(text: u.university);
-    _programCtrl = TextEditingController(text: u.program);
-    _bioCtrl = TextEditingController(text: u.bio);
-    _year = u.year;
+    final u = ref.read(currentUserProvider);
+    _firstNameCtrl = TextEditingController(text: u?.firstName ?? '');
+    _lastNameCtrl = TextEditingController(text: u?.lastName ?? '');
+    _emailCtrl = TextEditingController(text: u?.email ?? '');
+    _phoneCtrl = TextEditingController(text: u?.phone ?? '');
+    _universityCtrl = TextEditingController(text: u?.university ?? '');
+    _programCtrl = TextEditingController(text: u?.program ?? '');
+    _bioCtrl = TextEditingController(text: u?.bio ?? '');
+    _year = u?.year ?? 1;
   }
 
   @override
@@ -49,12 +50,18 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
   }
 
   Future<void> _save() async {
+    if (_isLoading) return;
+    setState(() => _errorMessage = null);
     if (!_formKey.currentState!.validate()) return;
-    setState(() => _isLoading = true);
-    await Future<void>.delayed(const Duration(milliseconds: 500));
-    if (!mounted) return;
 
-    final current = ref.read(currentUserProvider) ?? MockSharedData.demoUser;
+    final current = ref.read(currentUserProvider);
+    if (current == null) {
+      AppSnackbar.error(context, 'Session expirée. Veuillez vous reconnecter.');
+      return;
+    }
+
+    setState(() => _isLoading = true);
+
     final updated = current.copyWith(
       firstName: _firstNameCtrl.text.trim(),
       lastName: _lastNameCtrl.text.trim(),
@@ -66,9 +73,27 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
       bio: _bioCtrl.text.trim(),
     );
 
-    ref.read(sessionProvider.notifier).update(updated);
-    AppSnackbar.success(context, 'Profil mis à jour avec succès !');
-    Navigator.pop(context);
+    try {
+      await ref.read(sessionProvider.notifier).updateProfile(updated);
+      if (!mounted) return;
+      AppSnackbar.success(context, 'Profil mis à jour avec succès !');
+      Navigator.pop(context);
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _isLoading = false;
+        _errorMessage = e.message;
+      });
+      AppSnackbar.error(context, e.message);
+    } catch (e) {
+      if (!mounted) return;
+      final err = ApiException.fromError(e);
+      setState(() {
+        _isLoading = false;
+        _errorMessage = err.message;
+      });
+      AppSnackbar.error(context, err.message);
+    }
   }
 
   @override
@@ -85,27 +110,19 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 Center(
-                  child: Stack(
-                    children: [
-                      AppAvatar(name: '${_firstNameCtrl.text} ${_lastNameCtrl.text}', size: AppSizes.avatarXl),
-                      Positioned(
-                        bottom: 0,
-                        right: 0,
-                        child: Container(
-                          decoration: BoxDecoration(
-                            color: context.colors.primary,
-                            shape: BoxShape.circle,
-                          ),
-                          child: IconButton(
-                            icon: const Icon(Icons.camera_alt_rounded, color: Colors.white, size: 20),
-                            onPressed: () => AppSnackbar.info(context, 'Modification photo de profil simulée'),
-                          ),
-                        ),
-                      ),
-                    ],
+                  child: AppAvatar(
+                    name: '${_firstNameCtrl.text} ${_lastNameCtrl.text}'.trim(),
+                    size: AppSizes.avatarXl,
                   ),
                 ),
                 AppSpacing.gapLg,
+                if (_errorMessage != null) ...[
+                  Text(
+                    _errorMessage!,
+                    style: context.text.bodySmall?.copyWith(color: context.colors.error),
+                  ),
+                  AppSpacing.gapMd,
+                ],
                 Row(
                   children: [
                     Expanded(

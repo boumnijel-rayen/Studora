@@ -1,0 +1,45 @@
+{
+  "kind": "collectionType",
+  "collectionName": "app_notifications",
+  "info": {
+    "singularName": "app-notification",
+    "pluralName": "app-notifications",
+    "displayName": "App Notification",
+    "description": "Notification et rappel d'un utilisateur"
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "attributes": {
+    "title": {
+      "type": "string",
+      "required": true
+    },
+    "body": {
+      "type": "text",
+      "required": true
+    },
+    "date": {
+      "type": "datetime",
+      "required": true
+    },
+    "category": {
+      "type": "enumeration",
+      "enum": ["course", "deadline", "study", "group", "grade", "roommate", "system"],
+      "default": "system"
+    },
+    "read": {
+      "type": "boolean",
+      "default": false
+    },
+    "route": {
+      "type": "string"
+    },
+    "owner": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "plugin::users-permissions.user"
+    }
+  }
+}
+

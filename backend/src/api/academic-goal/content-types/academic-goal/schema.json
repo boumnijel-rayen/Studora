@@ -1,0 +1,43 @@
+{
+  "kind": "collectionType",
+  "collectionName": "academic_goals",
+  "info": {
+    "singularName": "academic-goal",
+    "pluralName": "academic-goals",
+    "displayName": "Academic Goal",
+    "description": "Objectif de moyenne générale ou par matière"
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "attributes": {
+    "title": {
+      "type": "string",
+      "required": true
+    },
+    "targetAverage": {
+      "type": "decimal",
+      "required": true,
+      "min": 0,
+      "max": 20
+    },
+    "subject": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::subject.subject"
+    },
+    "subjectId": {
+      "type": "string"
+    },
+    "subjectName": {
+      "type": "string",
+      "required": true
+    },
+    "owner": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "plugin::users-permissions.user"
+    }
+  }
+}
+
