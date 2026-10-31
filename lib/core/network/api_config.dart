@@ -1,11 +1,11 @@
-import 'package:flutter/foundation.dart';
-
 /// Configuration centralisée de l'environnement API Strapi.
 ///
-/// L'URL de base peut être surchargée au build ou à l'exécution via :
-/// `flutter run --dart-define=STRAPI_URL=https://api.studora.app`
+/// Par défaut, l'application utilise le serveur partagé de l'équipe. Pour viser
+/// un Strapi local (émulateur Android) :
+/// `flutter run --dart-define=STRAPI_URL=http://10.0.2.2:1337`
 abstract final class ApiConfig {
   static const String _envUrl = String.fromEnvironment('STRAPI_URL');
+  static const String _sharedUrl = 'https://studora-api-lz9u.onrender.com';
 
   static const Duration timeout = Duration(seconds: 15);
 
@@ -14,15 +14,7 @@ abstract final class ApiConfig {
     if (_envUrl.isNotEmpty) {
       return _envUrl.endsWith('/') ? _envUrl.substring(0, _envUrl.length - 1) : _envUrl;
     }
-    if (kIsWeb) {
-      return 'http://localhost:1337';
-    }
-    switch (defaultTargetPlatform) {
-      case TargetPlatform.android:
-        return 'http://10.0.2.2:1337';
-      default:
-        return 'http://localhost:1337';
-    }
+    return _sharedUrl;
   }
 
   /// URL de base des endpoints REST Strapi (`/api`).
