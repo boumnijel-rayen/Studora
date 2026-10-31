@@ -5,6 +5,7 @@ services:
     name: studora-api
     runtime: node
     plan: free
+    region: frankfurt
     rootDir: backend
     buildCommand: npm ci && npm run build
     # Limite réservée à l'exécution (512 Mo) : la compilation de l'admin dépasse 400 Mo de tas.
