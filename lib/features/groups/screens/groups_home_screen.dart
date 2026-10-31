@@ -132,7 +132,8 @@ class _GroupCard extends StatelessWidget {
             children: [
               SubjectChip(label: group.subjectName, color: color),
               const Spacer(),
-              AppBadge(label: 'Code : ${group.code}', tone: AppBadgeTone.neutral),
+              if (group.code.isNotEmpty)
+                AppBadge(label: 'Code : ${group.code}', tone: AppBadgeTone.neutral),
             ],
           ),
           AppSpacing.gapSm,

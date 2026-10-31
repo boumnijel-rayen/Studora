@@ -2,26 +2,18 @@
 
 const { createCoreController } = require('@strapi/strapi').factories;
 const { requireUser } = require('../../../utils/ownership');
+const { userDisplayName } = require('../../../utils/sanitize');
+const { isMemberOfGroup } = require('../../../utils/study-groups');
 
 const UID = 'api::group-message.group-message';
-const GROUP_UID = 'api::study-group.study-group';
 
-function userDisplayName(user) {
-  const full = `${user.firstName || ''} ${user.lastName || ''}`.trim();
-  return full || user.username || user.email || 'Étudiant';
-}
-
-async function isMemberOfGroup(strapi, groupId, userId) {
-  if (!groupId) return false;
-  const group = await strapi.documents(GROUP_UID).findOne({
-    documentId: groupId,
-    populate: { creator: true, members: true },
-  });
-  if (!group) return false;
-  return (
-    group.creator?.id === userId ||
-    (group.members || []).some((m) => m.id === userId)
-  );
+function serializeMessage(message, userId) {
+  const { sender, group, ...fields } = message;
+  return {
+    ...fields,
+    senderId: sender?.id ?? null,
+    isMe: sender?.id === userId,
+  };
 }
 
 module.exports = createCoreController(UID, ({ strapi }) => ({
@@ -29,25 +21,24 @@ module.exports = createCoreController(UID, ({ strapi }) => ({
     const user = requireUser(ctx);
     if (!user) return;
 
-    const groupId = ctx.query?.groupId || ctx.query?.filters?.groupId?.$eq;
-    if (groupId) {
-      const allowed = await isMemberOfGroup(strapi, groupId, user.id);
-      if (!allowed) {
-        return ctx.forbidden('Vous devez être membre de ce groupe pour consulter ses messages.');
-      }
+    const groupId = String(ctx.query?.groupId || '').trim();
+    if (!groupId) {
+      return ctx.badRequest('groupId est obligatoire.');
+    }
+
+    const allowed = await isMemberOfGroup(strapi, groupId, user.id);
+    if (!allowed) {
+      return ctx.forbidden('Vous devez être membre de ce groupe pour consulter ses messages.');
     }
 
     const entries = await strapi.documents(UID).findMany({
-      filters: groupId ? { groupId: { $eq: groupId } } : (ctx.query?.filters || {}),
+      filters: { groupId: { $eq: groupId } },
       sort: { timestamp: 'asc' },
-      populate: { sender: true, group: true },
+      populate: { sender: true },
     });
 
     return {
-      data: entries.map((m) => ({
-        ...m,
-        isMe: m.sender?.id === user.id,
-      })),
+      data: entries.map((m) => serializeMessage(m, user.id)),
       meta: { count: entries.length },
     };
   },
@@ -81,12 +72,6 @@ module.exports = createCoreController(UID, ({ strapi }) => ({
     });
 
     ctx.status = 201;
-    return {
-      data: {
-        ...created,
-        isMe: true,
-      },
-    };
+    return { data: serializeMessage(created, user.id) };
   },
 }));
-

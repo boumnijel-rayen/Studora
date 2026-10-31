@@ -10,7 +10,7 @@
     "start": "strapi start",
     "build": "strapi build",
     "strapi": "strapi",
-    "test": "node --test tests/"
+    "test": "node --test"
   },
   "dependencies": {
     "@strapi/plugin-users-permissions": "^5.12.0",

@@ -5,17 +5,48 @@ import 'package:go_router/go_router.dart';
 import '../../../core/core.dart';
 import '../providers/roommates_providers.dart';
 import '../roommates_routes.dart';
+import 'colocation_info_card.dart';
+import 'colocation_setup_screen.dart';
 
 class RoommatesHomeScreen extends ConsumerWidget {
   const RoommatesHomeScreen({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final colocationAsync = ref.watch(colocationAsyncProvider);
+
+    return colocationAsync.when(
+      skipLoadingOnRefresh: true,
+      loading: () => const AppScaffold(
+        title: 'Colocation',
+        body: AppLoader(message: 'Chargement de votre espace colocation...'),
+      ),
+      error: (err, _) => AppScaffold(
+        title: 'Colocation',
+        body: AppErrorState.fromError(
+          err,
+          onRetry: () => ref.read(colocationAsyncProvider.notifier).refresh(),
+        ),
+      ),
+      data: (colocation) => colocation == null
+          ? const ColocationSetupScreen()
+          : const _ColocationDashboard(),
+    );
+  }
+}
+
+class _ColocationDashboard extends ConsumerWidget {
+  const _ColocationDashboard();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
     final roommatesAsync = ref.watch(roommatesAsyncProvider);
     final choresAsync = ref.watch(choresAsyncProvider);
     final expensesAsync = ref.watch(expensesAsyncProvider);
+    final colocation = ref.watch(colocationProvider);
 
-    final roommates = roommatesAsync.value ?? const [];
+    final roommates = ref.watch(roommatesProvider);
+    final monthlyTotal = ref.watch(monthlyExpensesTotalProvider);
     final chores = choresAsync.value ?? const [];
     final sharedExpenses = ref.watch(sharedExpensesProvider);
     final pendingChores = chores.where((c) => !c.isCompleted).toList();
@@ -32,9 +63,14 @@ class RoommatesHomeScreen extends ConsumerWidget {
         sharedExpenses.isEmpty;
 
     return AppScaffold(
-      title: 'Colocation',
+      title: colocation?.name ?? 'Colocation',
       subtitle: 'Vie partagée & Dépenses',
       actions: [
+        IconButton(
+          tooltip: 'Discussion',
+          icon: const Icon(Icons.chat_bubble_outline_rounded),
+          onPressed: () => context.push(RoommatesRoutes.chat),
+        ),
         IconButton(
           tooltip: 'Équilibre des comptes',
           icon: const Icon(Icons.account_balance_wallet_outlined),
@@ -114,6 +150,11 @@ class RoommatesHomeScreen extends ConsumerWidget {
                   ),
                   AppSpacing.gapLg,
 
+                  if (colocation != null) ...[
+                    ColocationInfoCard(colocation: colocation),
+                    AppSpacing.gapLg,
+                  ],
+
                   // Raccourcis navigation
                   Row(
                     children: [
@@ -132,7 +173,7 @@ class RoommatesHomeScreen extends ConsumerWidget {
                         child: AppStatCard(
                           label: 'Dépenses du mois',
                           value:
-                              '${sharedExpenses.fold<double>(0, (a, e) => a + e.amount).toStringAsFixed(0)} $currency',
+                              '${monthlyTotal.toStringAsFixed(0)} $currency',
                           icon: Icons.receipt_long_rounded,
                           color: AppColors.tertiary,
                           caption: 'Voir les dépenses',
@@ -149,29 +190,7 @@ class RoommatesHomeScreen extends ConsumerWidget {
                     actionLabel: 'Gérer',
                     onAction: () => context.push(RoommatesRoutes.roommatesList),
                   ),
-                  if (roommates.isEmpty)
-                    AppCard(
-                      padding: const EdgeInsets.all(AppSpacing.md),
-                      child: Row(
-                        children: [
-                          const Icon(Icons.group_add_outlined, color: AppColors.moduleRoommates),
-                          AppSpacing.gapSm,
-                          Expanded(
-                            child: Text(
-                              'Aucun colocataire enregistré.',
-                              style: context.text.bodySmall,
-                            ),
-                          ),
-                          AppButton(
-                            label: 'Ajouter',
-                            size: AppButtonSize.sm,
-                            variant: AppButtonVariant.tonal,
-                            onPressed: () => context.push(RoommatesRoutes.newRoommate),
-                          ),
-                        ],
-                      ),
-                    )
-                  else
+                  if (roommates.isNotEmpty)
                     SingleChildScrollView(
                       scrollDirection: Axis.horizontal,
                       child: Row(
@@ -179,22 +198,24 @@ class RoommatesHomeScreen extends ConsumerWidget {
                           for (final r in roommates) ...[
                             AppCard(
                               padding: const EdgeInsets.all(AppSpacing.md),
-                              onTap: () async {
-                                try {
-                                  await ref
-                                      .read(roommatesAsyncProvider.notifier)
-                                      .togglePresence(r.id);
-                                } catch (e) {
-                                  if (context.mounted) {
-                                    AppSnackbar.error(
-                                      context,
-                                      e is ApiException
-                                          ? e.message
-                                          : 'Impossible de modifier la présence.',
-                                    );
-                                  }
-                                }
-                              },
+                              onTap: !r.canEdit
+                                  ? null
+                                  : () async {
+                                      try {
+                                        await ref
+                                            .read(roommatesAsyncProvider.notifier)
+                                            .togglePresence(r.id);
+                                      } catch (e) {
+                                        if (context.mounted) {
+                                          AppSnackbar.error(
+                                            context,
+                                            e is ApiException
+                                                ? e.message
+                                                : 'Impossible de modifier la présence.',
+                                          );
+                                        }
+                                      }
+                                    },
                               child: Column(
                                 children: [
                                   AppAvatar(name: r.name, size: 48, showOnline: r.isPresent),

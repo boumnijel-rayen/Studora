@@ -5,7 +5,7 @@
     "singularName": "roommate-member",
     "pluralName": "roommate-members",
     "displayName": "Roommate Member",
-    "description": "Membre d'une colocation"
+    "description": "Membre d'une colocation, avec ou sans compte Studora"
   },
   "options": {
     "draftAndPublish": false
@@ -16,12 +16,10 @@
       "required": true
     },
     "phone": {
-      "type": "string",
-      "required": true
+      "type": "string"
     },
     "email": {
-      "type": "email",
-      "required": true
+      "type": "email"
     },
     "roomNumber": {
       "type": "string",
@@ -31,6 +29,20 @@
       "type": "boolean",
       "default": true
     },
+    "isActive": {
+      "type": "boolean",
+      "default": true
+    },
+    "colocation": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::colocation.colocation"
+    },
+    "user": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "plugin::users-permissions.user"
+    },
     "owner": {
       "type": "relation",
       "relation": "manyToOne",
@@ -38,4 +50,3 @@
     }
   }
 }
-

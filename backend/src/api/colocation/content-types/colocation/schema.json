@@ -1,0 +1,35 @@
+{
+  "kind": "collectionType",
+  "collectionName": "colocations",
+  "info": {
+    "singularName": "colocation",
+    "pluralName": "colocations",
+    "displayName": "Colocation",
+    "description": "Logement partagé rejoint par ses membres via un code d'invitation"
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "attributes": {
+    "name": {
+      "type": "string",
+      "required": true
+    },
+    "address": {
+      "type": "string"
+    },
+    "details": {
+      "type": "text"
+    },
+    "code": {
+      "type": "string",
+      "required": true,
+      "unique": true
+    },
+    "creator": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "plugin::users-permissions.user"
+    }
+  }
+}

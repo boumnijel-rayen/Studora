@@ -13,6 +13,7 @@ export 'tokens/app_dimensions.dart';
 export 'tokens/app_typography.dart';
 export 'widgets/app_button.dart';
 export 'widgets/app_cards.dart';
+export 'widgets/app_chat.dart';
 export 'widgets/app_data_display.dart';
 export 'widgets/app_inputs.dart';
 export 'widgets/app_layout.dart';

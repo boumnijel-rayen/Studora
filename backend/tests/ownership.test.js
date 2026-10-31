@@ -6,6 +6,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const { requireUser } = require('../src/utils/ownership');
+const { stripPrivateFields, randomCode } = require('../src/utils/sanitize');
 
 test('requireUser rejects unauthenticated requests with 401 unauthorized', () => {
   let unauthorizedCalledWith = null;
@@ -32,7 +33,28 @@ test('requireUser returns authenticated user when present in ctx.state.user', ()
   assert.deepEqual(result, user);
 });
 
-test('All 16 required Strapi content-type schemas exist, are valid JSON, and enforce owner relations', () => {
+test('stripPrivateFields removes credentials at any depth without touching other fields', () => {
+  const result = stripPrivateFields({
+    title: 'Groupe',
+    date: new Date('2026-01-01T00:00:00.000Z'),
+    creator: { id: 1, password: 'hash', resetPasswordToken: 'tok', confirmationToken: 'tok' },
+    members: [{ id: 2, name: 'Sara', password: 'hash' }],
+  });
+  assert.deepEqual(result, {
+    title: 'Groupe',
+    date: new Date('2026-01-01T00:00:00.000Z'),
+    creator: { id: 1 },
+    members: [{ id: 2, name: 'Sara' }],
+  });
+});
+
+test('randomCode produces 8 characters from an unambiguous alphabet', () => {
+  for (let i = 0; i < 50; i++) {
+    assert.match(randomCode(), /^[A-HJ-NP-Z2-9]{8}$/);
+  }
+});
+
+test('All required Strapi content-type schemas exist, are valid JSON, and enforce owner relations', () => {
   const expectedApis = [
     'app-setting',
     'user-preference',
@@ -50,7 +72,11 @@ test('All 16 required Strapi content-type schemas exist, are valid JSON, and enf
     'roommate-member',
     'chore',
     'expense',
+    'colocation',
+    'colocation-message',
   ];
+
+  const colocationScopedApis = ['roommate-member', 'chore', 'expense', 'colocation-message'];
 
   const userOwnedApis = [
     'user-preference',
@@ -86,6 +112,9 @@ test('All 16 required Strapi content-type schemas exist, are valid JSON, and enf
     if (userOwnedApis.includes(api)) {
       assert.ok(parsed.attributes.owner, `Missing owner relation in ${api}`);
       assert.equal(parsed.attributes.owner.target, 'plugin::users-permissions.user');
+    }
+    if (colocationScopedApis.includes(api)) {
+      assert.equal(parsed.attributes.colocation?.target, 'api::colocation.colocation');
     }
     if (api === 'study-group') {
       assert.ok(parsed.attributes.creator, 'Missing creator relation in study-group');
