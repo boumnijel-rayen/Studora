@@ -21,8 +21,12 @@ Créer ensuite le compte administrateur sur `https://<service>.onrender.com/admi
 
 ## 4. Lancer l'application
 
+L'application utilise par défaut le serveur partagé (`lib/core/network/api_config.dart`) : lancer simplement **Run** dans Android Studio.
+
+Pour travailler avec un Strapi local sur l'émulateur Android :
+
 ```bash
-flutter run --dart-define=STRAPI_URL=https://<service>.onrender.com
+flutter run --dart-define=STRAPI_URL=http://10.0.2.2:1337
 ```
 
 ## Limites à connaître
