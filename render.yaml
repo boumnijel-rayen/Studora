@@ -1,0 +1,55 @@
+# Backend Strapi partagé de l'équipe (Render, offre gratuite) ; base PostgreSQL hébergée sur Neon.
+# Procédure complète : docs/deploiement-render-neon.md
+services:
+  - type: web
+    name: studora-api
+    runtime: node
+    plan: free
+    rootDir: backend
+    buildCommand: npm ci && npm run build
+    # Limite réservée à l'exécution (512 Mo) : la compilation de l'admin dépasse 400 Mo de tas.
+    startCommand: NODE_OPTIONS=--max-old-space-size=400 npm run start
+    healthCheckPath: /_health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: NODE_VERSION
+        value: "22"
+      - key: IS_PROXIED
+        value: "true"
+      - key: JWT_EXPIRES_IN
+        value: 7d
+      - key: CORS_ORIGINS
+        value: "*"
+      - key: APP_KEYS
+        generateValue: true
+      - key: API_TOKEN_SALT
+        generateValue: true
+      - key: ADMIN_JWT_SECRET
+        generateValue: true
+      - key: TRANSFER_TOKEN_SALT
+        generateValue: true
+      - key: JWT_SECRET
+        generateValue: true
+      - key: ENCRYPTION_KEY
+        generateValue: true
+      - key: DATABASE_CLIENT
+        value: postgres
+      - key: DATABASE_PORT
+        value: "5432"
+      - key: DATABASE_SSL
+        value: "true"
+      # Neon suspend la base après 5 minutes : ne garder aucune connexion ouverte au repos.
+      - key: DATABASE_POOL_MIN
+        value: "0"
+      - key: DATABASE_POOL_MAX
+        value: "5"
+      # Valeurs de la connexion directe Neon (hôte sans "-pooler"), saisies à la création du service.
+      - key: DATABASE_HOST
+        sync: false
+      - key: DATABASE_NAME
+        sync: false
+      - key: DATABASE_USERNAME
+        sync: false
+      - key: DATABASE_PASSWORD
+        sync: false
