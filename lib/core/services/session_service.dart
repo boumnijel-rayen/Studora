@@ -221,7 +221,7 @@ class SessionNotifier extends Notifier<AppUser?> {
     return user;
   }
 
-  /// Demande un lien de réinitialisation de mot de passe (`POST /api/auth/forgot-password`).
+  /// Demande l'envoi d'un code OTP à 6 chiffres par e-mail (`POST /api/auth/forgot-password`).
   Future<void> requestPasswordReset(String email) async {
     final client = ref.read(strapiClientProvider);
     await client.post(
@@ -229,6 +229,44 @@ class SessionNotifier extends Notifier<AppUser?> {
       wrapData: false,
       authenticated: false,
       body: {'email': email.trim().toLowerCase()},
+    );
+  }
+
+  /// Vérifie le code OTP à 6 chiffres saisi par l'utilisateur (`POST /api/auth/verify-otp`).
+  Future<void> verifyResetOtp({
+    required String email,
+    required String code,
+  }) async {
+    final client = ref.read(strapiClientProvider);
+    await client.post(
+      '/auth/verify-otp',
+      wrapData: false,
+      authenticated: false,
+      body: {
+        'email': email.trim().toLowerCase(),
+        'code': code.trim(),
+      },
+    );
+  }
+
+  /// Réinitialise le mot de passe après validation du code OTP (`POST /api/auth/reset-password`).
+  Future<void> resetPassword({
+    required String code,
+    required String password,
+    required String passwordConfirmation,
+    String? email,
+  }) async {
+    final client = ref.read(strapiClientProvider);
+    await client.post(
+      '/auth/reset-password',
+      wrapData: false,
+      authenticated: false,
+      body: {
+        'code': code.trim(),
+        'password': password,
+        'passwordConfirmation': passwordConfirmation,
+        if (email != null && email.trim().isNotEmpty) 'email': email.trim().toLowerCase(),
+      },
     );
   }
 

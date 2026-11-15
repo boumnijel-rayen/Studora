@@ -17,6 +17,7 @@ module.exports = ({ env }) => [
     name: 'strapi::body',
     config: { jsonLimit: '1mb' },
   },
+  'global::password-reset',
   'strapi::session',
   'strapi::favicon',
   'strapi::public',

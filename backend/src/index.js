@@ -89,6 +89,8 @@ const AUTHENTICATED_PERMISSIONS = [
   'api::expense.expense.settle',
 ];
 
+const crypto = require('node:crypto');
+
 async function ensureRolePermissions(strapi, roleType, actions) {
   const role = await strapi.db
     .query('plugin::users-permissions.role')

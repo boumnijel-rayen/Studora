@@ -122,3 +122,30 @@ test('All required Strapi content-type schemas exist, are valid JSON, and enforc
     }
   }
 });
+
+test('users-permissions extension registers custom forgotPassword, resetPassword, and updateMe handlers', () => {
+  const registerExtension = require('../src/extensions/users-permissions/strapi-server');
+  const plugin = {
+    controllers: {
+      auth: {},
+      user: {
+        update: async () => 'original',
+      },
+    },
+    routes: {
+      'content-api': {
+        routes: [],
+      },
+    },
+  };
+
+  const extended = registerExtension(plugin);
+  assert.equal(typeof extended.controllers.auth.forgotPassword, 'function');
+  assert.equal(typeof extended.controllers.auth.resetPassword, 'function');
+  assert.equal(typeof extended.controllers.user.updateMe, 'function');
+  assert.equal(
+    extended.routes['content-api'].routes.some((r) => r.method === 'PUT' && r.path === '/users/me'),
+    true,
+  );
+});
+
