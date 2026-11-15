@@ -8,11 +8,17 @@ class GroupsAsyncNotifier extends AsyncNotifier<List<StudyGroup>> {
   @override
   Future<List<StudyGroup>> build() async {
     final user = ref.watch(currentUserProvider);
+    ref.watch(subscriptionProvider);
     if (user == null) return const [];
 
-    final client = ref.read(strapiClientProvider);
-    final items = await client.getList('/study-groups');
-    return items.map(StudyGroup.fromJson).toList();
+    try {
+      final client = ref.read(strapiClientProvider);
+      final items = await client.getList('/study-groups');
+      return items.map(StudyGroup.fromJson).toList();
+    } on ApiException catch (e) {
+      if (e.isPlanRequired) return const [];
+      rethrow;
+    }
   }
 
   Future<StudyGroup> addGroup(StudyGroup group) async {

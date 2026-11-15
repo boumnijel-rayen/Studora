@@ -15,7 +15,10 @@ module.exports = ({ env }) => [
   'strapi::query',
   {
     name: 'strapi::body',
-    config: { jsonLimit: '1mb' },
+    config: {
+      jsonLimit: '1mb',
+      includeUnparsed: true,
+    },
   },
   'global::password-reset',
   'strapi::session',

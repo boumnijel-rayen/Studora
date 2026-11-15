@@ -19,6 +19,9 @@ class GroupsModule extends FeatureModule {
   String get id => 'groups';
 
   @override
+  AppFeature? get requiredFeature => AppFeature.studyGroups;
+
+  @override
   ModuleEntry get entry => const ModuleEntry(
     label: 'Groupes',
     icon: Icons.groups_outlined,

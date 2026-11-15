@@ -1,5 +1,10 @@
 'use strict';
 
 const { createCoreRouter } = require('@strapi/strapi').factories;
+const { FEATURES } = require('../../../utils/subscription/plans');
+const { requireFeature } = require('../../../utils/subscription/with-feature');
 
-module.exports = createCoreRouter('api::study-group.study-group');
+module.exports = requireFeature(
+  FEATURES.STUDY_GROUPS,
+  createCoreRouter('api::study-group.study-group'),
+);

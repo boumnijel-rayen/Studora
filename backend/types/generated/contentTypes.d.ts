@@ -1205,6 +1205,115 @@ export interface ApiSubjectSubject extends Struct.CollectionTypeSchema {
   };
 }
 
+export interface ApiSubscriptionEventSubscriptionEvent
+  extends Struct.CollectionTypeSchema {
+  collectionName: 'subscription_events';
+  info: {
+    description: "Historique des \u00E9v\u00E9nements d'abonnement (changements de plan, paiements) et idempotence des webhooks Stripe";
+    displayName: 'Subscription Event';
+    pluralName: 'subscription-events';
+    singularName: 'subscription-event';
+  };
+  options: {
+    draftAndPublish: false;
+  };
+  attributes: {
+    amount: Schema.Attribute.Integer;
+    createdAt: Schema.Attribute.DateTime;
+    createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    currency: Schema.Attribute.String;
+    locale: Schema.Attribute.String & Schema.Attribute.Private;
+    localizations: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::subscription-event.subscription-event'
+    > &
+      Schema.Attribute.Private;
+    occurredAt: Schema.Attribute.DateTime;
+    owner: Schema.Attribute.Relation<
+      'manyToOne',
+      'plugin::users-permissions.user'
+    >;
+    plan: Schema.Attribute.Enumeration<['core', 'plus', 'ultimate']>;
+    previousPlan: Schema.Attribute.Enumeration<['core', 'plus', 'ultimate']>;
+    publishedAt: Schema.Attribute.DateTime;
+    status: Schema.Attribute.String;
+    stripeEventId: Schema.Attribute.String &
+      Schema.Attribute.Private &
+      Schema.Attribute.Unique;
+    stripeInvoiceId: Schema.Attribute.String & Schema.Attribute.Private;
+    type: Schema.Attribute.String & Schema.Attribute.Required;
+    updatedAt: Schema.Attribute.DateTime;
+    updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+  };
+}
+
+export interface ApiSubscriptionSubscription
+  extends Struct.CollectionTypeSchema {
+  collectionName: 'subscriptions';
+  info: {
+    description: "Abonnement actuel d'un utilisateur (miroir synchronis\u00E9 de Stripe via webhooks)";
+    displayName: 'Subscription';
+    pluralName: 'subscriptions';
+    singularName: 'subscription';
+  };
+  options: {
+    draftAndPublish: false;
+  };
+  attributes: {
+    cancelAtPeriodEnd: Schema.Attribute.Boolean &
+      Schema.Attribute.DefaultTo<false>;
+    canceledAt: Schema.Attribute.DateTime;
+    createdAt: Schema.Attribute.DateTime;
+    createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    currentPeriodEnd: Schema.Attribute.DateTime;
+    currentPeriodStart: Schema.Attribute.DateTime;
+    endedAt: Schema.Attribute.DateTime;
+    lastPaymentError: Schema.Attribute.String;
+    locale: Schema.Attribute.String & Schema.Attribute.Private;
+    localizations: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::subscription.subscription'
+    > &
+      Schema.Attribute.Private;
+    owner: Schema.Attribute.Relation<
+      'oneToOne',
+      'plugin::users-permissions.user'
+    >;
+    pendingPlan: Schema.Attribute.Enumeration<['core', 'plus', 'ultimate']>;
+    plan: Schema.Attribute.Enumeration<['core', 'plus', 'ultimate']> &
+      Schema.Attribute.Required &
+      Schema.Attribute.DefaultTo<'core'>;
+    publishedAt: Schema.Attribute.DateTime;
+    status: Schema.Attribute.Enumeration<
+      [
+        'active',
+        'trialing',
+        'past_due',
+        'incomplete',
+        'unpaid',
+        'paused',
+        'canceled',
+        'expired',
+      ]
+    > &
+      Schema.Attribute.Required &
+      Schema.Attribute.DefaultTo<'active'>;
+    stripeCustomerId: Schema.Attribute.String &
+      Schema.Attribute.Private &
+      Schema.Attribute.Unique;
+    stripePriceId: Schema.Attribute.String & Schema.Attribute.Private;
+    stripeSubscriptionId: Schema.Attribute.String &
+      Schema.Attribute.Private &
+      Schema.Attribute.Unique;
+    updatedAt: Schema.Attribute.DateTime;
+    updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+  };
+}
+
 export interface ApiUserPreferenceUserPreference
   extends Struct.CollectionTypeSchema {
   collectionName: 'user_preferences';
@@ -1834,6 +1943,8 @@ declare module '@strapi/strapi' {
       'api::study-session.study-session': ApiStudySessionStudySession;
       'api::study-task.study-task': ApiStudyTaskStudyTask;
       'api::subject.subject': ApiSubjectSubject;
+      'api::subscription-event.subscription-event': ApiSubscriptionEventSubscriptionEvent;
+      'api::subscription.subscription': ApiSubscriptionSubscription;
       'api::user-preference.user-preference': ApiUserPreferenceUserPreference;
       'plugin::content-releases.release': PluginContentReleasesRelease;
       'plugin::content-releases.release-action': PluginContentReleasesReleaseAction;

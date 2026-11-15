@@ -23,6 +23,9 @@ class RoommatesModule extends FeatureModule {
   String get id => 'roommates';
 
   @override
+  AppFeature? get requiredFeature => AppFeature.roommates;
+
+  @override
   ModuleEntry get entry => const ModuleEntry(
     label: 'Colocation',
     icon: Icons.home_outlined,

@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/app_user.dart';
 import '../network/api_exception.dart';
 import '../network/strapi_client.dart';
+import '../subscription/subscription_provider.dart';
 
 /// Paramètres globaux de l'application récupérés depuis `/api/app-setting`
 /// (séparés des préférences individuelles de l'utilisateur).
@@ -85,6 +86,7 @@ class SessionNotifier extends Notifier<AppUser?> {
         final user = AppUser.fromJson(StrapiClient.normalizeEntity(response));
         state = user;
         await ref.read(preferencesProvider.notifier).fetchFromBackend();
+        await ref.read(subscriptionProvider.notifier).fetchFromBackend();
         return user;
       }
       await storage.clearToken();
@@ -150,10 +152,16 @@ class SessionNotifier extends Notifier<AppUser?> {
 
     state = user;
     await ref.read(preferencesProvider.notifier).fetchFromBackend();
+    await ref.read(subscriptionProvider.notifier).fetchFromBackend();
     return user;
   }
 
   /// Inscrit un nouvel utilisateur sur Strapi (`POST /api/auth/local/register`).
+  ///
+  /// Si [activateSession] vaut `false` (ex. inscription avec paiement Stripe en cours),
+  /// le jeton JWT est enregistré pour authentifier les appels API suivants mais `state`
+  /// n'est mis à jour qu'une fois le parcours d'inscription terminé (évite toute
+  /// redirection prématurée du routeur avant l'ouverture de la PaymentSheet).
   Future<AppUser> register({
     required String firstName,
     required String lastName,
@@ -163,6 +171,7 @@ class SessionNotifier extends Notifier<AppUser?> {
     String university = '',
     String program = '',
     int year = 1,
+    bool activateSession = true,
   }) async {
     final client = ref.read(strapiClientProvider);
     final storage = ref.read(tokenStorageProvider);
@@ -213,11 +222,14 @@ class SessionNotifier extends Notifier<AppUser?> {
 
     // Persiste les champs complémentaires de profil si Strapi register les a ignorés
     try {
-      user = await updateProfile(user);
+      user = await updateProfile(user, updateSessionState: activateSession);
     } catch (_) {}
 
-    state = user;
-    await ref.read(preferencesProvider.notifier).fetchFromBackend();
+    if (activateSession) {
+      state = user;
+      await ref.read(preferencesProvider.notifier).fetchFromBackend();
+      await ref.read(subscriptionProvider.notifier).fetchFromBackend();
+    }
     return user;
   }
 
@@ -271,7 +283,10 @@ class SessionNotifier extends Notifier<AppUser?> {
   }
 
   /// Met à jour les informations personnelles sur Strapi (`PUT /api/users/me` ou `/api/users/:id`).
-  Future<AppUser> updateProfile(AppUser updated) async {
+  Future<AppUser> updateProfile(
+    AppUser updated, {
+    bool updateSessionState = true,
+  }) async {
     final client = ref.read(strapiClientProvider);
     dynamic response;
     try {
@@ -294,11 +309,15 @@ class SessionNotifier extends Notifier<AppUser?> {
 
     if (response is Map<String, dynamic>) {
       final saved = AppUser.fromJson(StrapiClient.normalizeEntity(response));
-      state = saved;
+      if (updateSessionState) {
+        state = saved;
+      }
       return saved;
     }
 
-    state = updated;
+    if (updateSessionState) {
+      state = updated;
+    }
     return updated;
   }
 
@@ -308,6 +327,7 @@ class SessionNotifier extends Notifier<AppUser?> {
 
   Future<void> signOut() async {
     await ref.read(tokenStorageProvider).clearToken();
+    ref.read(subscriptionProvider.notifier).reset();
     state = null;
   }
 }

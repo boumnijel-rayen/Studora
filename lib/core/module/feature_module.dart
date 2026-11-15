@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
+import '../subscription/subscription_models.dart';
+
 /// Clé du navigateur racine.
 ///
 /// Pour afficher un écran **plein écran au-dessus du shell** (chat, Pomodoro,
@@ -82,6 +84,9 @@ abstract class FeatureModule {
   /// Routes affichées HORS du shell, avant/sans authentification
   /// (ex. `/auth/login`). Rarement nécessaire hors du module Auth.
   List<RouteBase> get fullscreenRoutes => const [];
+
+  /// Fonctionnalité d'abonnement requise pour accéder à ce module (`null` = inclus dans Core).
+  AppFeature? get requiredFeature => null;
 
   /// Carte résumé affichée sur le dashboard (facultative).
   Widget? buildDashboardCard(BuildContext context) => null;

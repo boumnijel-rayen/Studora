@@ -14,6 +14,7 @@ class DashboardScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final user = ref.watch(currentUserProvider);
+    final subscription = ref.watch(subscriptionProvider);
     final overallAverage = ref.watch(overallAverageProvider);
     final gradesCount = ref.watch(gradesProvider).length;
     final (minutesToday, sessionsToday) = ref.watch(todayStudyStatsProvider);
@@ -128,7 +129,11 @@ class DashboardScreen extends ConsumerWidget {
 
                     const AppSectionHeader(title: 'Activités & Modules'),
                     for (final mod in activeModules) ...[
-                      mod.buildDashboardCard(context)!,
+                      if (mod.requiredFeature != null &&
+                          !subscription.hasFeature(mod.requiredFeature!))
+                        LockedModuleDashboardCard(module: mod)
+                      else
+                        mod.buildDashboardCard(context)!,
                       AppSpacing.gapSm,
                     ],
                   ],

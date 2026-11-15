@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/core.dart';
@@ -7,13 +8,45 @@ import '../modules.dart';
 /// Shell principal adaptatif :
 /// - Mobile : Barre de navigation inférieure (`NavigationBar`)
 /// - Tablette / Bureau : Rail de navigation latéral (`NavigationRail`)
-class AppShell extends StatelessWidget {
+class AppShell extends ConsumerWidget {
   const AppShell({super.key, required this.navigationShell});
 
   final StatefulNavigationShell navigationShell;
 
+  Widget _tabIcon(IconData icon, {required bool locked}) {
+    if (!locked) return Icon(icon);
+    return Badge(
+      label: const Icon(Icons.lock_rounded, size: 10, color: Colors.white),
+      backgroundColor: AppColors.warning,
+      child: Icon(icon),
+    );
+  }
+
+  void _onSelectIndex(
+    BuildContext context,
+    WidgetRef ref,
+    int index,
+    List<FeatureModule> tabModules,
+  ) {
+    // Les indices 1..tabModules.length correspondent aux modules en onglet
+    if (index >= 1 && index <= tabModules.length) {
+      final mod = tabModules[index - 1];
+      final requiredFeature = mod.requiredFeature;
+      if (requiredFeature != null && !ref.read(hasFeatureProvider(requiredFeature))) {
+        context.push(lockedFeatureRoute(requiredFeature));
+        return;
+      }
+    }
+    navigationShell.goBranch(
+      index,
+      initialLocation: index == navigationShell.currentIndex,
+    );
+  }
+
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final sub = ref.watch(subscriptionProvider);
+
     // 5 onglets fixes : Accueil, Planning, Révisions, Groupes, Plus
     final tabModules = appModules
         .where((m) => m.entry.placement == ModulePlacement.tab)
@@ -28,8 +61,14 @@ class AppShell extends StatelessWidget {
       ),
       for (final mod in tabModules)
         NavigationDestination(
-          icon: Icon(mod.entry.icon),
-          selectedIcon: Icon(mod.entry.selectedIcon),
+          icon: _tabIcon(
+            mod.entry.icon,
+            locked: mod.requiredFeature != null && !sub.hasFeature(mod.requiredFeature!),
+          ),
+          selectedIcon: _tabIcon(
+            mod.entry.selectedIcon,
+            locked: mod.requiredFeature != null && !sub.hasFeature(mod.requiredFeature!),
+          ),
           label: mod.entry.label,
         ),
       const NavigationDestination(
@@ -47,8 +86,14 @@ class AppShell extends StatelessWidget {
       ),
       for (final mod in tabModules)
         NavigationRailDestination(
-          icon: Icon(mod.entry.icon),
-          selectedIcon: Icon(mod.entry.selectedIcon),
+          icon: _tabIcon(
+            mod.entry.icon,
+            locked: mod.requiredFeature != null && !sub.hasFeature(mod.requiredFeature!),
+          ),
+          selectedIcon: _tabIcon(
+            mod.entry.selectedIcon,
+            locked: mod.requiredFeature != null && !sub.hasFeature(mod.requiredFeature!),
+          ),
           label: Text(mod.entry.label),
         ),
       const NavigationRailDestination(
@@ -65,12 +110,8 @@ class AppShell extends StatelessWidget {
         body: navigationShell,
         bottomNavigationBar: NavigationBar(
           selectedIndex: navigationShell.currentIndex,
-          onDestinationSelected: (index) {
-            navigationShell.goBranch(
-              index,
-              initialLocation: index == navigationShell.currentIndex,
-            );
-          },
+          onDestinationSelected: (index) =>
+              _onSelectIndex(context, ref, index, tabModules),
           destinations: destinations,
         ),
       );
@@ -82,12 +123,8 @@ class AppShell extends StatelessWidget {
         children: [
           NavigationRail(
             selectedIndex: navigationShell.currentIndex,
-            onDestinationSelected: (index) {
-              navigationShell.goBranch(
-                index,
-                initialLocation: index == navigationShell.currentIndex,
-              );
-            },
+            onDestinationSelected: (index) =>
+                _onSelectIndex(context, ref, index, tabModules),
             labelType: NavigationRailLabelType.all,
             leading: Padding(
               padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),

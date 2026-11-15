@@ -8,8 +8,14 @@ class ColocationAsyncNotifier extends AsyncNotifier<Colocation?> {
   @override
   Future<Colocation?> build() async {
     final user = ref.watch(currentUserProvider);
+    ref.watch(subscriptionProvider);
     if (user == null) return null;
-    return _fetchColocation();
+    try {
+      return await _fetchColocation();
+    } on ApiException catch (e) {
+      if (e.isPlanRequired) return null;
+      rethrow;
+    }
   }
 
   Future<Colocation?> _fetchColocation() async {
