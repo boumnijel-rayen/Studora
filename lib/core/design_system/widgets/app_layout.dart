@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 
 import '../theme/app_palette.dart';
-import '../tokens/app_breakpoints.dart';
 import '../tokens/app_dimensions.dart';
 
 /// Scaffold standard : AppBar Studora + contenu centré et limité en largeur.
@@ -86,51 +85,6 @@ class AppMaxWidth extends StatelessWidget {
   Widget build(BuildContext context) => Align(
     alignment: Alignment.topCenter,
     child: ConstrainedBox(constraints: BoxConstraints(maxWidth: maxWidth), child: child),
-  );
-}
-
-/// Choisit un widget selon la taille d'écran.
-class AppResponsiveLayout extends StatelessWidget {
-  const AppResponsiveLayout({super.key, required this.compact, this.medium, this.expanded});
-
-  final Widget compact;
-  final Widget? medium;
-  final Widget? expanded;
-
-  @override
-  Widget build(BuildContext context) => LayoutBuilder(
-    builder: (_, cons) => switch (AppBreakpoints.of(cons.maxWidth)) {
-      ScreenSize.expanded => expanded ?? medium ?? compact,
-      ScreenSize.medium => medium ?? compact,
-      ScreenSize.compact => compact,
-    },
-  );
-}
-
-/// Grille adaptative : 1 colonne (mobile), 2 (tablette), 3 (desktop).
-class AppAdaptiveGrid extends StatelessWidget {
-  const AppAdaptiveGrid({
-    super.key,
-    required this.children,
-    this.spacing = AppSpacing.md,
-    this.minItemWidth = 300,
-  });
-
-  final List<Widget> children;
-  final double spacing;
-  final double minItemWidth;
-
-  @override
-  Widget build(BuildContext context) => LayoutBuilder(
-    builder: (_, cons) {
-      final cols = (cons.maxWidth / minItemWidth).floor().clamp(1, 4);
-      final w = (cons.maxWidth - spacing * (cols - 1)) / cols;
-      return Wrap(
-        spacing: spacing,
-        runSpacing: spacing,
-        children: [for (final c in children) SizedBox(width: w, child: c)],
-      );
-    },
   );
 }
 

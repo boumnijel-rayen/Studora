@@ -71,9 +71,6 @@ class ModuleEntry {
 abstract class FeatureModule {
   const FeatureModule();
 
-  /// Identifiant unique : 'auth', 'schedule', 'study', 'groups', 'grades', 'roommates'.
-  String get id;
-
   /// Entrée de navigation du module.
   ModuleEntry get entry;
 

@@ -47,72 +47,41 @@ class AppShell extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final sub = ref.watch(subscriptionProvider);
 
-    // 5 onglets fixes : Accueil, Planning, Révisions, Groupes, Plus
+    // Onglets : Accueil + modules « tab » (Planning, Révisions, Groupes) + Plus
     final tabModules = appModules
         .where((m) => m.entry.placement == ModulePlacement.tab)
         .toList()
       ..sort((a, b) => a.entry.order.compareTo(b.entry.order));
 
-    final destinations = [
-      const NavigationDestination(
-        icon: Icon(Icons.home_outlined),
-        selectedIcon: Icon(Icons.home_rounded),
-        label: 'Accueil',
-      ),
+    // Une seule description des onglets, réutilisée par la barre (mobile) et le rail (tablette).
+    final tabs = <({IconData icon, IconData selectedIcon, String label, bool locked})>[
+      (icon: Icons.home_outlined, selectedIcon: Icons.home_rounded, label: 'Accueil', locked: false),
       for (final mod in tabModules)
-        NavigationDestination(
-          icon: _tabIcon(
-            mod.entry.icon,
-            locked: mod.requiredFeature != null && !sub.hasFeature(mod.requiredFeature!),
-          ),
-          selectedIcon: _tabIcon(
-            mod.entry.selectedIcon,
-            locked: mod.requiredFeature != null && !sub.hasFeature(mod.requiredFeature!),
-          ),
+        (
+          icon: mod.entry.icon,
+          selectedIcon: mod.entry.selectedIcon,
           label: mod.entry.label,
+          locked: mod.requiredFeature != null && !sub.hasFeature(mod.requiredFeature!),
         ),
-      const NavigationDestination(
-        icon: Icon(Icons.grid_view_outlined),
-        selectedIcon: Icon(Icons.grid_view_rounded),
-        label: 'Plus',
-      ),
+      (icon: Icons.grid_view_outlined, selectedIcon: Icons.grid_view_rounded, label: 'Plus', locked: false),
     ];
 
-    final railDestinations = [
-      const NavigationRailDestination(
-        icon: Icon(Icons.home_outlined),
-        selectedIcon: Icon(Icons.home_rounded),
-        label: Text('Accueil'),
-      ),
-      for (final mod in tabModules)
-        NavigationRailDestination(
-          icon: _tabIcon(
-            mod.entry.icon,
-            locked: mod.requiredFeature != null && !sub.hasFeature(mod.requiredFeature!),
-          ),
-          selectedIcon: _tabIcon(
-            mod.entry.selectedIcon,
-            locked: mod.requiredFeature != null && !sub.hasFeature(mod.requiredFeature!),
-          ),
-          label: Text(mod.entry.label),
-        ),
-      const NavigationRailDestination(
-        icon: Icon(Icons.grid_view_outlined),
-        selectedIcon: Icon(Icons.grid_view_rounded),
-        label: Text('Plus'),
-      ),
-    ];
+    void onSelect(int index) => _onSelectIndex(context, ref, index, tabModules);
 
-    final isCompact = context.isCompact;
-
-    if (isCompact) {
+    if (context.isCompact) {
       return Scaffold(
         body: navigationShell,
         bottomNavigationBar: NavigationBar(
           selectedIndex: navigationShell.currentIndex,
-          onDestinationSelected: (index) =>
-              _onSelectIndex(context, ref, index, tabModules),
-          destinations: destinations,
+          onDestinationSelected: onSelect,
+          destinations: [
+            for (final t in tabs)
+              NavigationDestination(
+                icon: _tabIcon(t.icon, locked: t.locked),
+                selectedIcon: _tabIcon(t.selectedIcon, locked: t.locked),
+                label: t.label,
+              ),
+          ],
         ),
       );
     }
@@ -123,8 +92,7 @@ class AppShell extends ConsumerWidget {
         children: [
           NavigationRail(
             selectedIndex: navigationShell.currentIndex,
-            onDestinationSelected: (index) =>
-                _onSelectIndex(context, ref, index, tabModules),
+            onDestinationSelected: onSelect,
             labelType: NavigationRailLabelType.all,
             leading: Padding(
               padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
@@ -138,7 +106,14 @@ class AppShell extends ConsumerWidget {
                 child: const Icon(Icons.school_rounded, color: Colors.white, size: 24),
               ),
             ),
-            destinations: railDestinations,
+            destinations: [
+              for (final t in tabs)
+                NavigationRailDestination(
+                  icon: _tabIcon(t.icon, locked: t.locked),
+                  selectedIcon: _tabIcon(t.selectedIcon, locked: t.locked),
+                  label: Text(t.label),
+                ),
+            ],
           ),
           const VerticalDivider(width: 1, thickness: 1),
           Expanded(child: navigationShell),

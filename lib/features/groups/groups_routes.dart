@@ -5,5 +5,4 @@ abstract final class GroupsRoutes {
   static const join = '/groups/join';
   static String detail(String id) => '/groups/$id';
   static String chat(String id) => '/groups/$id/chat';
-  static String newActivity(String id) => '/groups/$id/activities/new';
 }

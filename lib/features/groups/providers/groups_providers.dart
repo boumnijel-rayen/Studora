@@ -48,13 +48,6 @@ class GroupsAsyncNotifier extends AsyncNotifier<List<StudyGroup>> {
     }
     return joined;
   }
-
-  Future<void> deleteGroup(String id) async {
-    final client = ref.read(strapiClientProvider);
-    await client.delete('/study-groups/$id');
-    final current = state.asData?.value ?? const <StudyGroup>[];
-    state = AsyncData(current.where((g) => g.id != id).toList());
-  }
 }
 
 final groupsAsyncProvider =

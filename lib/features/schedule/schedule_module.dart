@@ -17,9 +17,6 @@ class ScheduleModule extends FeatureModule {
   const ScheduleModule();
 
   @override
-  String get id => 'schedule';
-
-  @override
   ModuleEntry get entry => const ModuleEntry(
     label: 'Planning',
     icon: Icons.calendar_month_outlined,

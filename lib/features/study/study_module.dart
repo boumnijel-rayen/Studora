@@ -17,9 +17,6 @@ class StudyModule extends FeatureModule {
   const StudyModule();
 
   @override
-  String get id => 'study';
-
-  @override
   ModuleEntry get entry => const ModuleEntry(
     label: 'Révisions',
     icon: Icons.timer_outlined,

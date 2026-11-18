@@ -7,7 +7,6 @@ import '../../features/auth/auth_routes.dart';
 import '../dashboard/dashboard_screen.dart';
 import '../modules.dart';
 import '../shell/app_shell.dart';
-import '../shell/design_system_gallery_screen.dart';
 import '../shell/more_screen.dart';
 
 /// Notifier écouté par GoRouter pour réévaluer les redirections dès que
@@ -54,11 +53,6 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           },
         );
       },
-    ),
-    GoRoute(
-      path: '/dev/design-system',
-      parentNavigatorKey: AppNavigator.rootKey,
-      builder: (_, _) => const DesignSystemGalleryScreen(),
     ),
   ];
 

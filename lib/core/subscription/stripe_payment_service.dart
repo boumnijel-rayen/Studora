@@ -39,7 +39,6 @@ class StripePaymentService {
   Future<PaymentSheetOutcome> payWithPaymentSheet({
     required String clientSecret,
     String? publishableKey,
-    String merchantCountryCode = 'FR',
     ThemeMode themeMode = ThemeMode.system,
   }) async {
     if (!isPlatformSupported) {
@@ -92,12 +91,20 @@ class StripePaymentService {
       if (e.error.code == FailureCode.Canceled) {
         return PaymentSheetOutcome.canceled;
       }
+      final rawMsg = e.error.localizedMessage ?? e.error.message ?? '';
+      if (rawMsg.contains('elements/sessions') || rawMsg.contains('Failed to execute')) {
+        throw const ApiException(
+          kind: ApiErrorKind.network,
+          message:
+              'L\'émulateur ou l\'appareil n\'arrive pas à joindre les serveurs Stripe (api.stripe.com). '
+              'Vérifiez la connexion Internet / DNS de l\'émulateur (ou redémarrez-le via Cold Boot).',
+        );
+      }
       throw ApiException(
         kind: ApiErrorKind.validation,
-        message:
-            e.error.localizedMessage ??
-            e.error.message ??
-            'Le paiement par carte bancaire a échoué.',
+        message: rawMsg.isNotEmpty
+            ? rawMsg
+            : 'Le paiement par carte bancaire a échoué.',
       );
     } on StripeConfigException catch (e) {
       throw ApiException(

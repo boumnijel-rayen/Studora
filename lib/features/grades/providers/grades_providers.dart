@@ -76,10 +76,6 @@ final academicGoalsAsyncProvider =
       AcademicGoalsAsyncNotifier.new,
     );
 
-final academicGoalsProvider = Provider<List<AcademicGoal>>(
-  (ref) => ref.watch(academicGoalsAsyncProvider).asData?.value ?? const [],
-);
-
 /// Calcul automatique de la moyenne générale pondérée
 final overallAverageProvider = Provider<double>((ref) {
   final grades = ref.watch(gradesProvider);

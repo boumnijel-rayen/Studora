@@ -157,32 +157,6 @@ class MoreScreen extends ConsumerWidget {
             AppSpacing.gapSm,
           ],
 
-          AppSpacing.gapMd,
-          const AppSectionHeader(title: 'Laboratoire & Développement'),
-          AppCard(
-            onTap: () => context.push('/dev/design-system'),
-            child: Row(
-              children: [
-                const AppIconBox(icon: Icons.palette_rounded, color: AppColors.secondary),
-                AppSpacing.gapMd,
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text('Galerie du Design System', style: context.text.titleSmall),
-                      const SizedBox(height: 2),
-                      Text(
-                        'Vitrine des composants, tokens et variantes',
-                        style: context.text.bodySmall,
-                      ),
-                    ],
-                  ),
-                ),
-                Icon(Icons.chevron_right_rounded, color: context.colors.textSecondary),
-              ],
-            ),
-          ),
-
           AppSpacing.gapLg,
           const AppSectionHeader(title: 'Apparence & Session'),
           AppCard(

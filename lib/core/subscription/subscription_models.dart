@@ -99,8 +99,6 @@ enum PlanTier {
 
   bool get isPaid => priceMonthly > 0;
 
-  String get priceLabel => priceMonthly == 0 ? 'Gratuit (0 \$/mois)' : '$priceMonthly \$/mois';
-
   String get shortPriceLabel => priceMonthly == 0 ? 'Gratuit' : '$priceMonthly \$ / mois';
 
   List<AppFeature> get defaultFeatures => switch (this) {

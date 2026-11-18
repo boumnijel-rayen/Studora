@@ -92,19 +92,6 @@ class DeadlinesAsyncNotifier extends AsyncNotifier<List<Deadline>> {
     ]);
   }
 
-  Future<Deadline> updateDeadline(Deadline deadline) async {
-    final client = ref.read(strapiClientProvider);
-    final response = await client.put('/deadlines/${deadline.id}', body: deadline.toJson());
-    final updated = Deadline.fromJson(StrapiClient.unwrapMap(response)).copyWith(
-      subjectId: deadline.subjectId,
-    );
-    final current = state.asData?.value ?? const <Deadline>[];
-    state = AsyncData([
-      for (final d in current) d.id == deadline.id ? updated : d,
-    ]);
-    return updated;
-  }
-
   Future<void> delete(String id) async {
     final client = ref.read(strapiClientProvider);
     await client.delete('/deadlines/$id');
@@ -125,12 +112,4 @@ final todayCoursesProvider = Provider<List<Course>>((ref) {
   final todayWeekday = DateTime.now().weekday;
   final all = ref.watch(coursesProvider);
   return all.where((c) => c.dayOfWeek == todayWeekday).toList();
-});
-
-/// Échéances à venir non complétées triées par date
-final upcomingDeadlinesProvider = Provider<List<Deadline>>((ref) {
-  final all = ref.watch(deadlinesProvider);
-  final uncompleted = all.where((d) => !d.isCompleted).toList()
-    ..sort((a, b) => a.dueDate.compareTo(b.dueDate));
-  return uncompleted;
 });

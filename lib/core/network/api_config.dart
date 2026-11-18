@@ -9,7 +9,7 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 /// `flutter run --dart-define=STRAPI_URL=https://...`
 abstract final class ApiConfig {
   static const String _envUrl = String.fromEnvironment('STRAPI_URL');
-  static const String _localUrl = 'http://localhost:1337';
+  static const String _localUrl = 'http://10.0.2.2:1337';
   static const String _androidEmulatorUrl = 'http://10.0.2.2:1337';
 
   static const Duration timeout = Duration(seconds: 15);

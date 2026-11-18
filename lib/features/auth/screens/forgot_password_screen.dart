@@ -40,7 +40,12 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
   Future<void> _sendOtp() async {
     if (_isLoading) return;
     setState(() => _errorMessage = null);
-    if (!_emailFormKey.currentState!.validate()) return;
+    // Le formulaire e-mail n'est dans l'arbre que lors de l'étape `email`.
+    // Depuis l'étape OTP ("Renvoyer le code"), on saute la validation du Form.
+    final emailForm = _emailFormKey.currentState;
+    if (emailForm != null && !emailForm.validate()) return;
+    // Sécurité : si l'e-mail est vide (ne devrait jamais arriver), on ne fait rien.
+    if (_emailCtrl.text.trim().isEmpty) return;
 
     setState(() => _isLoading = true);
     try {
@@ -72,7 +77,7 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
   Future<void> _verifyOtp() async {
     if (_isLoading) return;
     setState(() => _errorMessage = null);
-    if (!_otpFormKey.currentState!.validate()) return;
+    if (!(_otpFormKey.currentState?.validate() ?? false)) return;
 
     setState(() => _isLoading = true);
     try {
@@ -106,7 +111,7 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
   Future<void> _submitNewPassword() async {
     if (_isLoading) return;
     setState(() => _errorMessage = null);
-    if (!_resetFormKey.currentState!.validate()) return;
+    if (!(_resetFormKey.currentState?.validate() ?? false)) return;
 
     setState(() => _isLoading = true);
     try {

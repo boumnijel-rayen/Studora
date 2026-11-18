@@ -122,63 +122,6 @@ class AppButton extends StatelessWidget {
   }
 }
 
-/// Bouton icône carré arrondi (actions d'AppBar, cartes…).
-class AppIconButton extends StatelessWidget {
-  const AppIconButton({
-    super.key,
-    required this.icon,
-    required this.onPressed,
-    this.tooltip,
-    this.filled = false,
-    this.color,
-    this.badgeCount,
-  });
-
-  final IconData icon;
-  final VoidCallback? onPressed;
-  final String? tooltip;
-  final bool filled;
-  final Color? color;
-
-  /// Pastille de compteur (notifications, messages non lus).
-  final int? badgeCount;
-
-  @override
-  Widget build(BuildContext context) {
-    final c = context.colors;
-    final fg = color ?? (filled ? c.primary : c.textPrimary);
-    final button = _Pressable(
-      enabled: onPressed != null,
-      child: Material(
-        color: filled ? fg.withValues(alpha: 0.12) : c.surface,
-        shape: RoundedRectangleBorder(
-          borderRadius: AppRadius.brMd,
-          side: filled ? BorderSide.none : BorderSide(color: c.border),
-        ),
-        clipBehavior: Clip.antiAlias,
-        child: InkWell(
-          onTap: onPressed,
-          child: SizedBox.square(
-            dimension: 44,
-            child: Icon(icon, size: AppSizes.iconMd, color: fg),
-          ),
-        ),
-      ),
-    );
-
-    final withBadge = (badgeCount ?? 0) > 0
-        ? Badge(
-            label: Text(badgeCount! > 9 ? '9+' : '$badgeCount'),
-            backgroundColor: c.secondary,
-            offset: const Offset(-2, 2),
-            child: button,
-          )
-        : button;
-
-    return tooltip == null ? withBadge : Tooltip(message: tooltip, child: withBadge);
-  }
-}
-
 /// Micro-animation d'enfoncement au toucher.
 class _Pressable extends StatefulWidget {
   const _Pressable({required this.child, required this.enabled});

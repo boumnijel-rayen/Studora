@@ -1,7 +1,9 @@
 'use strict';
 
 const crypto = require('node:crypto');
+const dns = require('node:dns');
 const fs = require('node:fs');
+const net = require('node:net');
 const path = require('node:path');
 const nodemailer = require('nodemailer');
 
@@ -74,26 +76,62 @@ async function sendOtpEmail(strapi, toEmail, otpCode) {
     </div>
   `;
 
-  const port = Number(env.SMTP_PORT || 587);
-  const transporter = nodemailer.createTransport({
-    host: smtpHost,
-    port,
-    secure: port === 465,
-    auth: {
-      user: smtpUser,
-      pass: smtpPass,
-    },
-  });
+  // Résout le nom d'hôte en IPv4 via le résolveur système (`dns.lookup`) afin d'éviter
+  // le blocage de 120 s de `dns.Resolver` (c-ares) sous Windows lorsque des serveurs DNS
+  // IPv6 locaux (ex. fec0:0:0:ffff::1) ne répondent pas.
+  let resolvedHost = smtpHost;
+  if (!net.isIP(smtpHost)) {
+    try {
+      const lookedUp = await dns.promises.lookup(smtpHost, { family: 4 });
+      if (lookedUp?.address) {
+        resolvedHost = lookedUp.address;
+      }
+    } catch (_) {
+      resolvedHost = smtpHost;
+    }
+  }
 
-  await transporter.sendMail({
-    from: `"Studora" <${smtpUser}>`,
-    to: toEmail,
-    subject,
-    text,
-    html,
-  });
+  const configuredPort = Number(env.SMTP_PORT || 587);
+  const candidatePorts = configuredPort === 465 ? [465, 587] : [configuredPort, 465];
+  let lastError = null;
 
-  strapi.log.info(`[OTP] E-mail OTP envoyé avec succès à ${toEmail} via SMTP (${smtpHost}).`);
+  for (const port of candidatePorts) {
+    const transporter = nodemailer.createTransport({
+      host: resolvedHost,
+      port,
+      secure: port === 465,
+      tls: {
+        servername: smtpHost,
+      },
+      connectionTimeout: 6000,
+      greetingTimeout: 6000,
+      socketTimeout: 10000,
+      auth: {
+        user: smtpUser,
+        pass: smtpPass,
+      },
+    });
+
+    try {
+      await transporter.sendMail({
+        from: `"Studora" <${smtpUser}>`,
+        to: toEmail,
+        subject,
+        text,
+        html,
+      });
+      strapi.log.info(
+        `[OTP] E-mail OTP envoyé avec succès à ${toEmail} via SMTP (${smtpHost}:${port}).`,
+      );
+      return;
+    } catch (err) {
+      lastError = err;
+      // Si l'erreur est liée aux identifiants (EAUTH), inutile de réessayer sur un autre port.
+      if (err.code === 'EAUTH') break;
+    }
+  }
+
+  throw lastError || new Error("Échec de l'envoi SMTP.");
 }
 
 module.exports = (_config, { strapi }) => {

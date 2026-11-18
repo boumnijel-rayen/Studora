@@ -18,9 +18,6 @@ class AuthModule extends FeatureModule {
   const AuthModule();
 
   @override
-  String get id => 'auth';
-
-  @override
   ModuleEntry get entry => const ModuleEntry(
     label: 'Profil',
     icon: Icons.person_outline_rounded,

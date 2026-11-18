@@ -39,12 +39,9 @@ class ApiException implements Exception {
   final int? statusCode;
   final Map<String, dynamic>? details;
 
-  bool get isNetwork => kind == ApiErrorKind.network;
   bool get isUnauthorized => kind == ApiErrorKind.unauthorized;
   bool get isForbidden => kind == ApiErrorKind.forbidden;
   bool get isPlanRequired => kind == ApiErrorKind.planRequired;
-  bool get isServer => kind == ApiErrorKind.server;
-  bool get isValidation => kind == ApiErrorKind.validation;
 
   String? get requiredPlan => details?['requiredPlan']?.toString();
   String? get lockedFeature => details?['feature']?.toString();

@@ -16,9 +16,6 @@ class GradesModule extends FeatureModule {
   const GradesModule();
 
   @override
-  String get id => 'grades';
-
-  @override
   ModuleEntry get entry => const ModuleEntry(
     label: 'Notes',
     icon: Icons.insights_outlined,

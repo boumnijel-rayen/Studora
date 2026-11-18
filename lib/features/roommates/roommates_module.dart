@@ -20,9 +20,6 @@ class RoommatesModule extends FeatureModule {
   const RoommatesModule();
 
   @override
-  String get id => 'roommates';
-
-  @override
   AppFeature? get requiredFeature => AppFeature.roommates;
 
   @override
