@@ -168,3 +168,115 @@ class PomodoroConfig {
     autoStartBreaks: autoStartBreaks ?? this.autoStartBreaks,
   );
 }
+
+// ── Analyse IA de l'historique ────────────────────────────────────────────────
+
+int _readInt(dynamic v, [int fallback = 0]) =>
+    v is num ? v.toInt() : int.tryParse('$v') ?? fallback;
+
+double _readDouble(dynamic v, [double fallback = 0]) =>
+    v is num ? v.toDouble() : double.tryParse('$v') ?? fallback;
+
+List<T> _readList<T>(dynamic v, T Function(Map<String, dynamic>) fromJson) => v is List
+    ? v.whereType<Map<String, dynamic>>().map(fromJson).toList()
+    : <T>[];
+
+/// Tendance repérée par l'IA (`progres`, `negligee`, `moment`, `regularite`, `notes`).
+@immutable
+class StudyObservation {
+  const StudyObservation({required this.type, required this.texte});
+
+  factory StudyObservation.fromJson(Map<String, dynamic> json) => StudyObservation(
+    type: (json['type'] ?? '').toString(),
+    texte: (json['texte'] ?? '').toString(),
+  );
+
+  final String type;
+  final String texte;
+}
+
+/// Lien entre temps de révision et moyenne d'une matière.
+@immutable
+class GradeLink {
+  const GradeLink({
+    required this.subjectName,
+    required this.minutesRevisees,
+    required this.moyenne,
+    this.commentaire = '',
+  });
+
+  factory GradeLink.fromJson(Map<String, dynamic> json) => GradeLink(
+    subjectName: (json['subjectName'] ?? '').toString(),
+    minutesRevisees: _readInt(json['minutesRevisees']),
+    moyenne: _readDouble(json['moyenne']),
+    commentaire: (json['commentaire'] ?? '').toString(),
+  );
+
+  final String subjectName;
+  final int minutesRevisees;
+  final double moyenne;
+  final String commentaire;
+}
+
+/// Session proposée par l'IA, validée par le serveur.
+@immutable
+class SessionRecommendation {
+  const SessionRecommendation({
+    required this.subjectId,
+    required this.subjectName,
+    required this.dureeMinutes,
+    required this.date,
+    this.raison = '',
+  });
+
+  factory SessionRecommendation.fromJson(Map<String, dynamic> json) => SessionRecommendation(
+    subjectId: (json['subjectId'] ?? '').toString(),
+    subjectName: (json['subjectName'] ?? '').toString(),
+    dureeMinutes: _readInt(json['dureeMinutes'], 30),
+    date: DateTime.tryParse((json['date'] ?? '').toString()) ?? DateTime.now(),
+    raison: (json['raison'] ?? '').toString(),
+  );
+
+  final String subjectId;
+  final String subjectName;
+  final int dureeMinutes;
+  final DateTime date;
+  final String raison;
+}
+
+/// Résultat complet de `POST /api/study-sessions/insights`.
+@immutable
+class StudyInsights {
+  const StudyInsights({
+    required this.resume,
+    this.observations = const [],
+    this.liensNotes = const [],
+    this.recommandations = const [],
+    this.donneesInsuffisantes = false,
+  });
+
+  factory StudyInsights.fromJson(Map<String, dynamic> json) => StudyInsights(
+    resume: (json['resume'] ?? '').toString(),
+    observations: _readList(json['observations'], StudyObservation.fromJson),
+    liensNotes: _readList(json['liensNotes'], GradeLink.fromJson),
+    recommandations: _readList(json['recommandations'], SessionRecommendation.fromJson),
+    donneesInsuffisantes: json['donneesInsuffisantes'] == true,
+  );
+
+  final String resume;
+  final List<StudyObservation> observations;
+  final List<GradeLink> liensNotes;
+  final List<SessionRecommendation> recommandations;
+  final bool donneesInsuffisantes;
+
+  StudyInsights withoutRecommendation(int index) => StudyInsights(
+    resume: resume,
+    observations: observations,
+    liensNotes: liensNotes,
+    recommandations: [
+      for (var i = 0; i < recommandations.length; i++)
+        if (i != index) recommandations[i],
+    ],
+    donneesInsuffisantes: donneesInsuffisantes,
+  );
+}

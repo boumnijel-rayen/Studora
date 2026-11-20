@@ -56,6 +56,7 @@ const AUTHENTICATED_PERMISSIONS = [
   'api::study-session.study-session.create',
   'api::study-session.study-session.update',
   'api::study-session.study-session.delete',
+  'api::study-session.study-session.insights',
   'api::grade.grade.find',
   'api::grade.grade.findOne',
   'api::grade.grade.create',

@@ -5,6 +5,7 @@
   "description": "Backend Strapi 5 de l'application Studora (authentification, données par utilisateur, groupes, colocation).",
   "scripts": {
     "setup:env": "node scripts/setup-env.js",
+    "seed:study": "node scripts/seed-study-demo.js",
     "develop": "strapi develop",
     "dev": "strapi develop",
     "start": "strapi start",
@@ -13,6 +14,7 @@
     "test": "node --test"
   },
   "dependencies": {
+    "@google/genai": "^3.3.0",
     "@strapi/admin": "^5.60.0",
     "@strapi/plugin-users-permissions": "^5.12.0",
     "@strapi/strapi": "^5.12.0",
@@ -22,7 +24,8 @@
     "react-dom": "^18.3.1",
     "react-router-dom": "^6.28.0",
     "stripe": "^18.5.0",
-    "styled-components": "^6.1.13"
+    "styled-components": "^6.1.13",
+    "zod": "^4.4.3"
   },
   "engines": {
     "node": ">=18.0.0 <=22.x.x",

@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/core.dart';
 import '../models/study_models.dart';
 import '../providers/study_providers.dart';
+import 'study_insights_card.dart';
 
 class StudyHistoryScreen extends ConsumerWidget {
   const StudyHistoryScreen({super.key});
@@ -35,12 +36,16 @@ class StudyHistoryScreen extends ConsumerWidget {
             }
           }
           final weekTotalHours = hoursPerWeekday.fold<double>(0, (a, b) => a + b);
-          final dailyAvgHours = weekTotalHours / 7.0;
+          // Jours écoulés dans la semaine : lundi = 1 … dimanche = 7.
+          final daysElapsed = DateTime.now().weekday;
+          final dailyAvgHours = weekTotalHours / daysElapsed;
           final maxBarY = max(4.0, (hoursPerWeekday.reduce(max) + 1.0).ceilToDouble());
 
           return ListView(
             padding: const EdgeInsets.all(AppSpacing.md),
             children: [
+              const StudyInsightsCard(),
+              AppSpacing.gapLg,
               Row(
                 children: [
                   Expanded(

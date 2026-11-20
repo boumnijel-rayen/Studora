@@ -139,10 +139,49 @@ class PomodoroConfigNotifier extends Notifier<PomodoroConfig> {
 final pomodoroConfigProvider =
     NotifierProvider<PomodoroConfigNotifier, PomodoroConfig>(PomodoroConfigNotifier.new);
 
-/// Statistiques de révision calculées à partir des sessions réelles du backend.
+/// Statistiques du jour : sessions terminées dont la date locale est aujourd'hui.
 final todayStudyStatsProvider = Provider<(int minutesToday, int sessionsCompleted)>((ref) {
   final sessions = ref.watch(studySessionsProvider);
-  final completed = sessions.where((s) => s.isCompleted).toList();
+  final today = DateTime.now().dateOnly;
+  final completed = sessions
+      .where((s) => s.isCompleted && s.date.toLocal().dateOnly == today)
+      .toList();
   final totalMin = completed.fold<int>(0, (acc, s) => acc + s.durationMinutes);
   return (totalMin, completed.length);
 });
+
+/// Analyse IA de l'historique (`POST /api/study-sessions/insights`).
+///
+/// Aucun appel automatique : chaque analyse est payante, elle n'est lancée
+/// que sur demande via [analyze].
+class StudyInsightsNotifier extends AsyncNotifier<StudyInsights?> {
+  @override
+  Future<StudyInsights?> build() async {
+    ref.watch(currentUserProvider);
+    return null;
+  }
+
+  Future<void> analyze() async {
+    state = const AsyncLoading();
+    state = await AsyncValue.guard(() async {
+      final client = ref.read(strapiClientProvider);
+      final response = await client.post(
+        '/study-sessions/insights',
+        body: const {},
+        wrapData: false,
+        timeout: const Duration(seconds: 60),
+      );
+      return StudyInsights.fromJson(StrapiClient.unwrapMap(response));
+    });
+  }
+
+  /// Retire une recommandation une fois la session créée.
+  void markApplied(int index) {
+    final current = state.asData?.value;
+    if (current == null || index < 0 || index >= current.recommandations.length) return;
+    state = AsyncData(current.withoutRecommendation(index));
+  }
+}
+
+final studyInsightsProvider =
+    AsyncNotifierProvider<StudyInsightsNotifier, StudyInsights?>(StudyInsightsNotifier.new);
