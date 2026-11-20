@@ -26,7 +26,8 @@ class ColocationChatScreen extends ConsumerWidget {
         messages: ref.watch(colocationMessagesProvider),
         emptyMessage: 'Envoyez le premier message à vos colocataires !',
         onRefresh: () => ref.invalidate(colocationMessagesProvider),
-        onSend: (text) => ref.read(colocationChatServiceProvider).sendMessage(text),
+        onSend: (text, {attachmentName, attachmentUrl, attachmentType, attachmentSize}) =>
+            ref.read(colocationChatServiceProvider).sendMessage(text),
       ),
     );
   }

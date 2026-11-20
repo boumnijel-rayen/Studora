@@ -12,8 +12,7 @@
   },
   "attributes": {
     "text": {
-      "type": "text",
-      "required": true
+      "type": "text"
     },
     "senderName": {
       "type": "string",
@@ -36,6 +35,18 @@
       "type": "relation",
       "relation": "manyToOne",
       "target": "plugin::users-permissions.user"
+    },
+    "attachmentName": {
+      "type": "string"
+    },
+    "attachmentUrl": {
+      "type": "string"
+    },
+    "attachmentType": {
+      "type": "string"
+    },
+    "attachmentSize": {
+      "type": "integer"
     }
   }
 }

@@ -102,16 +102,29 @@ class GroupChatService {
     required String groupId,
     required String text,
     required String senderName,
+    String? attachmentName,
+    String? attachmentUrl,
+    String? attachmentType,
+    int? attachmentSize,
   }) async {
     final client = _ref.read(strapiClientProvider);
     final user = _ref.read(currentUserProvider);
+    final trimmedText = text.trim();
+    final effectiveText = trimmedText.isNotEmpty
+        ? trimmedText
+        : (attachmentName != null ? '📄 Document joint : $attachmentName' : 'Message');
+
     final response = await client.post(
       '/group-messages',
       body: {
         'groupId': groupId,
-        'text': text.trim(),
+        'text': effectiveText,
         'senderName': senderName,
         'timestamp': DateTime.now().toUtc().toIso8601String(),
+        if (attachmentName != null) 'attachmentName': attachmentName,
+        if (attachmentUrl != null) 'attachmentUrl': attachmentUrl,
+        if (attachmentType != null) 'attachmentType': attachmentType,
+        if (attachmentSize != null) 'attachmentSize': attachmentSize,
       },
     );
     final created = GroupMessage.fromJson(
@@ -128,6 +141,12 @@ class GroupChatService {
     final created = GroupActivity.fromJson(StrapiClient.unwrapMap(response));
     _ref.invalidate(groupActivitiesFamilyProvider(activity.groupId));
     return created;
+  }
+
+  Future<void> deleteActivity(String activityId, String groupId) async {
+    final client = _ref.read(strapiClientProvider);
+    await client.delete('/group-activities/$activityId');
+    _ref.invalidate(groupActivitiesFamilyProvider(groupId));
   }
 }
 

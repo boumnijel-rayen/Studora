@@ -111,9 +111,13 @@ module.exports = createCoreController(UID, ({ strapi }) => ({
       );
     }
 
+    if (group.creator?.id === user.id) {
+      return ctx.badRequest('En tant que créateur et administrateur de ce groupe, vous ne pouvez pas utiliser le code d\'accès pour le rejoindre (vous en êtes déjà le propriétaire).');
+    }
+
     const existingMemberIds = (group.members || []).map((m) => m.id);
-    if (!existingMemberIds.includes(user.id)) {
-      existingMemberIds.push(user.id);
+    if (existingMemberIds.includes(user.id)) {
+      return ctx.badRequest('Vous faites déjà partie des membres de ce groupe d\'étude.');
     }
 
     const displayName = userDisplayName(user);

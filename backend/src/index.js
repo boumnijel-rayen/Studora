@@ -66,6 +66,9 @@ const AUTHENTICATED_PERMISSIONS = [
   'api::group-message.group-message.create',
   'api::group-activity.group-activity.find',
   'api::group-activity.group-activity.create',
+  'api::group-activity.group-activity.update',
+  'api::group-activity.group-activity.delete',
+  'api::group-activity.group-activity.remove',
   'api::colocation.colocation.mine',
   'api::colocation.colocation.create',
   'api::colocation.colocation.joinByCode',
@@ -102,7 +105,12 @@ async function ensureRolePermissions(strapi, roleType, actions) {
 
     if (!existing) {
       await strapi.db.query('plugin::users-permissions.permission').create({
-        data: { role: role.id, action },
+        data: { role: role.id, action, enabled: true },
+      });
+    } else {
+      await strapi.db.query('plugin::users-permissions.permission').update({
+        where: { id: existing.id },
+        data: { enabled: true },
       });
     }
   }
