@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -28,7 +29,10 @@ class _GroupDetailScreenState extends ConsumerState<GroupDetailScreen> with Sing
     final titleCtrl = TextEditingController();
     final locationCtrl = TextEditingController();
     final descCtrl = TextEditingController();
-    var date = DateTime.now().add(const Duration(days: 2));
+    var date = DateTime.now();
+    var timeOfDay = const TimeOfDay(hour: 19, minute: 0);
+    var selectedDuration = '2h';
+    String? errorMessage;
 
     await AppBottomSheet.show<void>(
       context,
@@ -37,6 +41,32 @@ class _GroupDetailScreenState extends ConsumerState<GroupDetailScreen> with Sing
         builder: (ctx, setSheetState) => Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
+            if (errorMessage != null) ...[
+              Container(
+                padding: const EdgeInsets.all(AppSpacing.sm),
+                decoration: BoxDecoration(
+                  color: context.colors.error.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(AppRadius.sm),
+                  border: Border.all(color: context.colors.error.withValues(alpha: 0.5)),
+                ),
+                child: Row(
+                  children: [
+                    Icon(Icons.error_outline_rounded, color: context.colors.error, size: 20),
+                    AppSpacing.gapSm,
+                    Expanded(
+                      child: Text(
+                        errorMessage!,
+                        style: context.text.bodySmall?.copyWith(
+                          color: context.colors.error,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              AppSpacing.gapMd,
+            ],
             AppTextField(
               controller: titleCtrl,
               label: 'Titre de la séance',
@@ -49,10 +79,41 @@ class _GroupDetailScreenState extends ConsumerState<GroupDetailScreen> with Sing
               hint: 'ex: Bibliothèque universitaire — Salle 2',
             ),
             AppSpacing.gapMd,
-            AppDateField(
-              label: 'Date',
-              initialValue: date,
-              onChanged: (d) => setSheetState(() => date = d),
+            Row(
+              children: [
+                Expanded(
+                  child: AppDateField(
+                    label: 'Date',
+                    initialValue: date,
+                    firstDate: DateTime.now(),
+                    onChanged: (d) => setSheetState(() {
+                      date = d;
+                      errorMessage = null;
+                    }),
+                  ),
+                ),
+                AppSpacing.gapSm,
+                Expanded(
+                  child: AppTimeField(
+                    label: 'Horaire',
+                    initialValue: timeOfDay,
+                    onChanged: (t) => setSheetState(() {
+                      if (t != null) timeOfDay = t;
+                      errorMessage = null;
+                    }),
+                  ),
+                ),
+              ],
+            ),
+            AppSpacing.gapMd,
+            AppDropdownField<String>(
+              label: 'Durée estimée',
+              value: selectedDuration,
+              items: const ['30 min', '1h', '1h30', '2h', '2h30', '3h', '4h'],
+              itemLabel: (v) => v,
+              onChanged: (v) => setSheetState(() {
+                if (v != null) selectedDuration = v;
+              }),
             ),
             AppSpacing.gapMd,
             AppTextField(
@@ -66,8 +127,25 @@ class _GroupDetailScreenState extends ConsumerState<GroupDetailScreen> with Sing
               icon: Icons.check_rounded,
               expand: true,
               onPressed: () async {
-                if (titleCtrl.text.trim().isEmpty) return;
+                if (titleCtrl.text.trim().isEmpty) {
+                  setSheetState(() => errorMessage = 'Veuillez saisir un titre pour l\'activité.');
+                  AppSnackbar.error(context, 'Veuillez saisir un titre pour l\'activité.');
+                  return;
+                }
+
+                // Validation de la date : interdire les dates antérieures à aujourd'hui
+                final today = DateTime(DateTime.now().year, DateTime.now().month, DateTime.now().day);
+                final selectedDay = DateTime(date.year, date.month, date.day);
+                if (selectedDay.isBefore(today)) {
+                  setSheetState(() => errorMessage = 'La date de l\'activité ne peut pas être antérieure à aujourd\'hui.');
+                  AppSnackbar.error(context, 'La date de l\'activité ne peut pas être antérieure à aujourd\'hui.');
+                  return;
+                }
+
+                final formattedTime = '${timeOfDay.hour.toString().padLeft(2, '0')}:${timeOfDay.minute.toString().padLeft(2, '0')}';
+
                 try {
+                  setSheetState(() => errorMessage = null);
                   final user = ref.read(currentUserProvider);
                   await ref.read(groupChatServiceProvider).createActivity(
                     GroupActivity(
@@ -77,13 +155,17 @@ class _GroupDetailScreenState extends ConsumerState<GroupDetailScreen> with Sing
                       description: descCtrl.text.trim(),
                       date: date,
                       location: locationCtrl.text.trim(),
+                      time: formattedTime,
+                      duration: selectedDuration,
                       participantNames: user != null ? [user.fullName] : const [],
                     ),
                   );
-                  if (ctx.mounted) Navigator.of(ctx).pop();
+                  if (mounted) Navigator.of(ctx).pop();
                 } catch (e) {
-                  if (ctx.mounted) {
-                    AppSnackbar.error(ctx, ApiException.fromError(e).message);
+                  final err = ApiException.fromError(e).message;
+                  setSheetState(() => errorMessage = err);
+                  if (mounted) {
+                    AppSnackbar.error(context, err);
                   }
                 }
               },
@@ -166,7 +248,10 @@ class _GroupDetailScreenState extends ConsumerState<GroupDetailScreen> with Sing
                               Text('Code d\'accès : ${group.code}', style: context.text.labelMedium),
                               const Spacer(),
                               TextButton(
-                                onPressed: () => AppSnackbar.info(context, 'Code ${group.code} copié !'),
+                                onPressed: () {
+                                  Clipboard.setData(ClipboardData(text: group.code));
+                                  AppSnackbar.success(context, 'Code ${group.code} copié dans le presse-papier !');
+                                },
                                 child: const Text('Copier'),
                               ),
                             ],
@@ -251,6 +336,10 @@ class _GroupDetailScreenState extends ConsumerState<GroupDetailScreen> with Sing
                   separatorBuilder: (_, _) => AppSpacing.gapSm,
                   itemBuilder: (context, i) {
                     final act = activities[i];
+                    final today = DateTime(DateTime.now().year, DateTime.now().month, DateTime.now().day);
+                    final activityDay = DateTime(act.date.year, act.date.month, act.date.day);
+                    final isPast = activityDay.isBefore(today);
+
                     return AppCard(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -265,13 +354,38 @@ class _GroupDetailScreenState extends ConsumerState<GroupDetailScreen> with Sing
                                   children: [
                                     Text(act.title, style: context.text.titleSmall),
                                     Text(
-                                      '${Formatters.day(act.date)}${act.location.isNotEmpty ? ' • ${act.location}' : ''}',
+                                      '${Formatters.day(act.date)}${act.time.isNotEmpty ? " à ${act.time}" : ""}${act.duration.isNotEmpty ? " (${act.duration})" : ""}${act.location.isNotEmpty ? " • ${act.location}" : ""}',
                                       style: context.text.bodySmall,
                                     ),
                                   ],
                                 ),
                               ),
-                              const AppBadge(label: 'À venir', tone: AppBadgeTone.success),
+                              if (isPast) ...[
+                                const AppBadge(label: 'Passée', tone: AppBadgeTone.neutral),
+                                AppSpacing.gapXs,
+                                IconButton(
+                                  tooltip: 'Supprimer l\'activité passée',
+                                  icon: const Icon(Icons.delete_outline_rounded, color: AppColors.error, size: 20),
+                                  onPressed: () async {
+                                    final confirm = await AppConfirmDialog.show(
+                                      context,
+                                      title: 'Supprimer l\'activité',
+                                      message: 'Voulez-vous vraiment supprimer cette activité passée ?',
+                                      confirmLabel: 'Supprimer',
+                                      destructive: true,
+                                    );
+                                    if (confirm) {
+                                      try {
+                                        await ref.read(groupChatServiceProvider).deleteActivity(act.id, widget.groupId);
+                                        AppSnackbar.success(context, 'Activité supprimée avec succès.');
+                                      } catch (e) {
+                                        AppSnackbar.error(context, ApiException.fromError(e).message);
+                                      }
+                                    }
+                                  },
+                                ),
+                              ] else
+                                const AppBadge(label: 'À venir', tone: AppBadgeTone.success),
                             ],
                           ),
                           if (act.description.isNotEmpty) ...[

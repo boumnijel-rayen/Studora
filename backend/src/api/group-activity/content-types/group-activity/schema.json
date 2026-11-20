@@ -27,6 +27,14 @@
       "type": "string",
       "default": ""
     },
+    "time": {
+      "type": "string",
+      "default": ""
+    },
+    "duration": {
+      "type": "string",
+      "default": ""
+    },
     "groupId": {
       "type": "string",
       "required": true
@@ -37,4 +45,3 @@
     }
   }
 }
-

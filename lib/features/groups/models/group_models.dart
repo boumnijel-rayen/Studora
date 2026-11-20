@@ -24,7 +24,7 @@ class StudyGroup {
         : const <String>[];
 
     return StudyGroup(
-      id: (json['id'] ?? json['documentId'] ?? '').toString(),
+      id: (json['documentId'] ?? json['id'] ?? '').toString(),
       name: (json['name'] ?? '').toString(),
       description: (json['description'] ?? '').toString(),
       subjectId: (json['subjectId'] ?? subjectMap?['id'] ?? '').toString(),
@@ -86,6 +86,10 @@ class GroupMessage {
     required this.timestamp,
     required this.isMe,
     this.senderId,
+    this.attachmentName,
+    this.attachmentUrl,
+    this.attachmentType,
+    this.attachmentSize,
   });
 
   factory GroupMessage.fromJson(Map<String, dynamic> json, {String? currentUserId}) {
@@ -97,8 +101,13 @@ class GroupMessage {
         ? json['isMe'] as bool
         : (currentUserId != null && senderId == currentUserId);
 
+    final rawSize = json['attachmentSize'];
+    final int? parsedSize = rawSize is num
+        ? rawSize.toInt()
+        : int.tryParse('$rawSize');
+
     return GroupMessage(
-      id: (json['id'] ?? json['documentId'] ?? '').toString(),
+      id: (json['documentId'] ?? json['id'] ?? '').toString(),
       groupId: (json['groupId'] ?? '').toString(),
       senderName: (json['senderName'] ?? 'Étudiant').toString(),
       text: (json['text'] ?? '').toString(),
@@ -106,6 +115,10 @@ class GroupMessage {
           DateTime.now(),
       isMe: isMeFlag,
       senderId: senderId,
+      attachmentName: json['attachmentName']?.toString(),
+      attachmentUrl: json['attachmentUrl']?.toString(),
+      attachmentType: json['attachmentType']?.toString(),
+      attachmentSize: parsedSize,
     );
   }
 
@@ -116,12 +129,52 @@ class GroupMessage {
   final DateTime timestamp;
   final bool isMe;
   final String? senderId;
+  final String? attachmentName;
+  final String? attachmentUrl;
+  final String? attachmentType;
+  final int? attachmentSize;
+
+  bool get hasAttachment =>
+      (attachmentName != null && attachmentName!.trim().isNotEmpty) ||
+      text.startsWith('📄 Document joint :');
+
+  String get resolvedAttachmentName {
+    if (attachmentName != null && attachmentName!.trim().isNotEmpty) {
+      return attachmentName!.trim();
+    }
+    if (text.startsWith('📄 Document joint :')) {
+      return text.replaceFirst('📄 Document joint : ', '').trim();
+    }
+    return '';
+  }
+
+  String get attachmentExtension {
+    if (!hasAttachment) return '';
+    final name = resolvedAttachmentName;
+    final dot = name.lastIndexOf('.');
+    if (dot != -1 && dot < name.length - 1) {
+      return name.substring(dot + 1).toLowerCase();
+    }
+    return 'pdf';
+  }
+
+  String get formattedAttachmentSize {
+    if (attachmentSize == null || attachmentSize! <= 0) return '';
+    final bytes = attachmentSize!;
+    if (bytes < 1024) return '$bytes B';
+    if (bytes < 1024 * 1024) return '${(bytes / 1024).toStringAsFixed(1)} KB';
+    return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
+  }
 
   Map<String, dynamic> toJson() => {
     'groupId': groupId,
     'senderName': senderName,
     'text': text,
     'timestamp': timestamp.toUtc().toIso8601String(),
+    if (attachmentName != null) 'attachmentName': attachmentName,
+    if (attachmentUrl != null) 'attachmentUrl': attachmentUrl,
+    if (attachmentType != null) 'attachmentType': attachmentType,
+    if (attachmentSize != null) 'attachmentSize': attachmentSize,
   };
 }
 
@@ -135,17 +188,21 @@ class GroupActivity {
     required this.location,
     required this.participantNames,
     this.description = '',
+    this.time = '',
+    this.duration = '',
   });
 
   factory GroupActivity.fromJson(Map<String, dynamic> json) {
     final rawParticipants = json['participantNames'];
     return GroupActivity(
-      id: (json['id'] ?? json['documentId'] ?? '').toString(),
+      id: (json['documentId'] ?? json['id'] ?? '').toString(),
       groupId: (json['groupId'] ?? '').toString(),
       title: (json['title'] ?? '').toString(),
       description: (json['description'] ?? '').toString(),
       date: DateTime.tryParse((json['date'] ?? '').toString()) ?? DateTime.now(),
       location: (json['location'] ?? '').toString(),
+      time: (json['time'] ?? '').toString(),
+      duration: (json['duration'] ?? '').toString(),
       participantNames: rawParticipants is List
           ? rawParticipants.map((e) => e.toString()).toList()
           : const <String>[],
@@ -158,6 +215,8 @@ class GroupActivity {
   final String description;
   final DateTime date;
   final String location;
+  final String time;
+  final String duration;
   final List<String> participantNames;
 
   Map<String, dynamic> toJson() => {
@@ -166,6 +225,8 @@ class GroupActivity {
     'description': description,
     'date': date.toUtc().toIso8601String(),
     'location': location,
+    if (time.isNotEmpty) 'time': time,
+    if (duration.isNotEmpty) 'duration': duration,
     'participantNames': participantNames,
   };
 }

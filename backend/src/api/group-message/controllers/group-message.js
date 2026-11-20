@@ -31,8 +31,15 @@ module.exports = createCoreController(UID, ({ strapi }) => ({
       return ctx.forbidden('Vous devez être membre de ce groupe pour consulter ses messages.');
     }
 
+    const numId = Number(groupId);
     const entries = await strapi.documents(UID).findMany({
-      filters: { groupId: { $eq: groupId } },
+      filters: {
+        $or: [
+          { groupId: { $eq: groupId } },
+          { group: { documentId: { $eq: groupId } } },
+          { group: { id: { $eq: isNaN(numId) ? -1 : numId } } },
+        ],
+      },
       sort: { timestamp: 'asc' },
       populate: { sender: true },
     });
@@ -48,11 +55,17 @@ module.exports = createCoreController(UID, ({ strapi }) => ({
     if (!user) return;
 
     const raw = ctx.request.body?.data || ctx.request.body || {};
-    const groupId = String(raw.groupId || '').trim();
+    const groupId = String(raw.groupId || raw.group || '').trim();
     const text = String(raw.text || '').trim();
+    const attachmentName = raw.attachmentName ? String(raw.attachmentName).trim() : null;
+    const attachmentUrl = raw.attachmentUrl ? String(raw.attachmentUrl).trim() : null;
+    const attachmentType = raw.attachmentType ? String(raw.attachmentType).trim() : null;
+    const attachmentSize = typeof raw.attachmentSize === 'number'
+        ? Number(raw.attachmentSize)
+        : (raw.attachmentSize ? Number(raw.attachmentSize) : null);
 
-    if (!groupId || !text) {
-      return ctx.badRequest('groupId et text sont obligatoires.');
+    if (!groupId || (!text && !attachmentName)) {
+      return ctx.badRequest('groupId et au moins un texte ou une pièce jointe sont obligatoires.');
     }
 
     const allowed = await isMemberOfGroup(strapi, groupId, user.id);
@@ -63,10 +76,14 @@ module.exports = createCoreController(UID, ({ strapi }) => ({
     const created = await strapi.documents(UID).create({
       data: {
         groupId,
-        text,
+        text: text || (attachmentName ? `📄 Document joint : ${attachmentName}` : ''),
         senderName: userDisplayName(user),
         timestamp: new Date().toISOString(),
         sender: user.id,
+        attachmentName,
+        attachmentUrl,
+        attachmentType,
+        attachmentSize,
       },
       populate: { sender: true },
     });

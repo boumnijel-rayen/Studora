@@ -922,6 +922,7 @@ export interface ApiGroupActivityGroupActivity
       Schema.Attribute.Private;
     date: Schema.Attribute.DateTime & Schema.Attribute.Required;
     description: Schema.Attribute.Text & Schema.Attribute.DefaultTo<''>;
+    duration: Schema.Attribute.String & Schema.Attribute.DefaultTo<''>;
     groupId: Schema.Attribute.String & Schema.Attribute.Required;
     locale: Schema.Attribute.String & Schema.Attribute.Private;
     localizations: Schema.Attribute.Relation<
@@ -932,6 +933,7 @@ export interface ApiGroupActivityGroupActivity
     location: Schema.Attribute.String & Schema.Attribute.DefaultTo<''>;
     participantNames: Schema.Attribute.JSON & Schema.Attribute.DefaultTo<[]>;
     publishedAt: Schema.Attribute.DateTime;
+    time: Schema.Attribute.String & Schema.Attribute.DefaultTo<''>;
     title: Schema.Attribute.String & Schema.Attribute.Required;
     updatedAt: Schema.Attribute.DateTime;
     updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
@@ -952,6 +954,10 @@ export interface ApiGroupMessageGroupMessage
     draftAndPublish: false;
   };
   attributes: {
+    attachmentName: Schema.Attribute.String;
+    attachmentSize: Schema.Attribute.Integer;
+    attachmentType: Schema.Attribute.String;
+    attachmentUrl: Schema.Attribute.String;
     createdAt: Schema.Attribute.DateTime;
     createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
       Schema.Attribute.Private;
@@ -972,7 +978,7 @@ export interface ApiGroupMessageGroupMessage
       'plugin::users-permissions.user'
     >;
     senderName: Schema.Attribute.String & Schema.Attribute.Required;
-    text: Schema.Attribute.Text & Schema.Attribute.Required;
+    text: Schema.Attribute.Text;
     timestamp: Schema.Attribute.DateTime & Schema.Attribute.Required;
     updatedAt: Schema.Attribute.DateTime;
     updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
