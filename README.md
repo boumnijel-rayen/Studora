@@ -76,6 +76,15 @@ You only need this for backend work. Your local Strapi stores its data in a SQLi
 
 On Windows, if PowerShell blocks `npm`, use `npm.cmd` instead.
 
+### AI grade import
+
+In the Grades module, **Importer un relevé (IA)** sends a photo or PDF of a transcript to the backend, which asks Google's Gemini API to read the grades. The student reviews the detected grades before anything is saved.
+
+- The backend needs a `GEMINI_API_KEY` (free, created on https://aistudio.google.com/apikey). Put it in `backend/.env` locally and in Render's **Environment** page for the shared server. Without it, the import answers "not configured" and everything else works.
+- The key uses Gemini's free tier, which has per-minute and per-day quotas shared by everyone. The backend allows 10 analyses per user per hour and files up to 4 MB.
+- The document is sent to Google to be read and is not stored by Studora. On the free tier, Google may use it to improve its products.
+- The code is in `backend/src/utils/grade-import.js` and `lib/features/grades/screens/import_grades_screen.dart`.
+
 ### Tests
 
 ```bash

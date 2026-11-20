@@ -61,6 +61,7 @@ const AUTHENTICATED_PERMISSIONS = [
   'api::grade.grade.create',
   'api::grade.grade.update',
   'api::grade.grade.delete',
+  'api::grade.grade.scanImport',
   'api::academic-goal.academic-goal.find',
   'api::academic-goal.academic-goal.findOne',
   'api::academic-goal.academic-goal.create',

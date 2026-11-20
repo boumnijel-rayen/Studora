@@ -1,3 +1,6 @@
+import 'dart:convert';
+import 'dart:typed_data';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/core.dart';
@@ -25,6 +28,24 @@ class GradesAsyncNotifier extends AsyncNotifier<List<Grade>> {
     final current = state.asData?.value ?? const <Grade>[];
     state = AsyncData([created, ...current]);
     return created;
+  }
+
+  /// Fait analyser un relevé (image ou PDF) par l'IA du backend et renvoie les
+  /// notes détectées. Rien n'est enregistré : l'étudiant valide ensuite la liste.
+  Future<List<ScannedGrade>> scanDocument({
+    required Uint8List bytes,
+    required String mimeType,
+  }) async {
+    final client = ref.read(strapiClientProvider);
+    final response = await client.post(
+      '/grades/import-scan',
+      body: {'fileBase64': base64Encode(bytes), 'mimeType': mimeType},
+      // L'analyse par IA dépasse le délai standard de 15 s.
+      timeout: const Duration(seconds: 90),
+    );
+    final grades = StrapiClient.unwrapMap(response)['grades'];
+    if (grades is! List) return const [];
+    return grades.whereType<Map<String, dynamic>>().map(ScannedGrade.fromJson).toList();
   }
 
   Future<void> delete(String id) async {

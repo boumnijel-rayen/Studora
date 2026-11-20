@@ -20,7 +20,8 @@ dependencies:
   # Notifications système des nouveaux messages de colocation (module Colocation).
   flutter_local_notifications: ^19.5.0
   uuid: ^4.6.0
-  file_picker: ^10.0.0
+  # Choix du relevé de notes à analyser (import IA, module Notes) + pièces jointes groupes.
+  file_picker: ^13.4.0
 
 dev_dependencies:
   flutter_test:
