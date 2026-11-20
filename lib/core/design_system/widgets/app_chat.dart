@@ -215,15 +215,16 @@ class _AppChatViewState extends State<AppChatView> {
 
   Future<void> _pickFromDevice() async {
     try {
-      final result = await FilePicker.platform.pickFiles(
+      final files = await FilePicker.pickFiles(
         type: FileType.custom,
         allowedExtensions: ['pdf', 'doc', 'docx', 'txt', 'ppt', 'pptx', 'xls', 'xlsx', 'png', 'jpg', 'jpeg'],
       );
-      if (result != null && result.files.isNotEmpty) {
-        final file = result.files.first;
+      if (files.isNotEmpty) {
+        final file = files.first;
+        final fileSize = file.lengthSync() ?? await file.length() ?? 0;
         setState(() {
           _selectedFileName = file.name;
-          _selectedFileSize = file.size;
+          _selectedFileSize = fileSize;
           _selectedFilePath = file.path;
           _selectedFileType = file.extension;
         });
