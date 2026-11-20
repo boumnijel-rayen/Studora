@@ -14,6 +14,7 @@ import 'screens/colocation_chat_screen.dart';
 import 'screens/expenses_screen.dart';
 import 'screens/roommates_home_screen.dart';
 import 'screens/roommates_list_screen.dart';
+import 'services/colocation_message_notifications.dart';
 
 /// Module 6 — Gestion des colocataires (Membre 6).
 class RoommatesModule extends FeatureModule {
@@ -94,8 +95,10 @@ class RoommatesModule extends FeatureModule {
   @override
   Widget? buildDashboardCard(BuildContext context) => Consumer(
     builder: (context, ref, _) {
-      final chores = ref.watch(choresProvider);
-      final pendingCount = chores.where((c) => !c.isCompleted).length;
+      // Notifications des nouveaux messages : la carte reste montée sur l'accueil
+      // (onglet conservé par le shell), ce qui maintient la surveillance active.
+      ref.watch(colocationMessageNotifierProvider);
+      final pendingCount = ref.watch(visiblePendingChoresProvider).length;
       final netBalance = ref.watch(netUserBalanceProvider);
       final currency = ref.watch(preferencesProvider).currency;
       final sign = netBalance >= 0 ? '+' : '';

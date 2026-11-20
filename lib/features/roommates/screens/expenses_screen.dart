@@ -127,8 +127,8 @@ class _ExpenseTile extends ConsumerWidget {
                 Text(expense.title, style: context.text.titleSmall),
                 Text(
                   expense.isSettlement && expense.reimbursedToName != null
-                      ? '${expense.paidByName} → ${expense.reimbursedToName} • ${Formatters.shortDate(expense.date)}'
-                      : 'Payé par ${expense.paidByName} • ${Formatters.shortDate(expense.date)}',
+                      ? '${expense.paidByName} → ${expense.reimbursedToName} • ${Formatters.shortDate(expense.date.toLocal())}'
+                      : 'Payé par ${expense.paidByName} • ${Formatters.shortDate(expense.date.toLocal())}',
                   style: context.text.bodySmall,
                 ),
               ],
@@ -147,21 +147,34 @@ class _ExpenseTile extends ConsumerWidget {
               ),
             ],
           ),
-          IconButton(
-            icon: const Icon(Icons.delete_outline_rounded, size: 18),
-            onPressed: () async {
-              try {
-                await ref.read(expensesAsyncProvider.notifier).delete(expense.id);
-              } catch (e) {
-                if (context.mounted) {
-                  AppSnackbar.error(
-                    context,
-                    e is ApiException ? e.message : 'Impossible de supprimer la dépense.',
-                  );
+          // Seule la personne qui a saisi l'opération peut la supprimer, après confirmation.
+          if (expense.canDelete)
+            IconButton(
+              tooltip: 'Supprimer',
+              icon: const Icon(Icons.delete_outline_rounded, size: 18),
+              onPressed: () async {
+                final confirmed = await AppConfirmDialog.show(
+                  context,
+                  title: expense.isSettlement
+                      ? 'Supprimer ce remboursement ?'
+                      : 'Supprimer « ${expense.title} » ?',
+                  message: 'Les soldes de tous les colocataires seront recalculés.',
+                  confirmLabel: 'Supprimer',
+                  destructive: true,
+                );
+                if (!confirmed) return;
+                try {
+                  await ref.read(expensesAsyncProvider.notifier).delete(expense.id);
+                } catch (e) {
+                  if (context.mounted) {
+                    AppSnackbar.error(
+                      context,
+                      e is ApiException ? e.message : 'Impossible de supprimer la dépense.',
+                    );
+                  }
                 }
-              }
-            },
-          ),
+              },
+            ),
         ],
       ),
     );

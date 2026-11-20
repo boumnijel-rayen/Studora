@@ -64,6 +64,10 @@ class Roommate {
   /// Seul le titulaire peut modifier une fiche reliée à un compte.
   bool get canEdit => !hasAccount || isMe;
 
+  /// Dépenses qu'on peut saisir pour ce colocataire : les siennes, ou celles d'un colocataire
+  /// sans compte (même règle que [canEdit], vérifiée aussi par le serveur).
+  bool get canRecordFor => canEdit;
+
   Roommate copyWith({
     String? id,
     String? name,
@@ -116,6 +120,9 @@ class Chore {
     required this.dueDate,
     this.isCompleted = false,
     this.frequency = 'Hebdomadaire',
+    this.canComplete = false,
+    this.canReassign = false,
+    this.canDelete = false,
   });
 
   final String id;
@@ -125,6 +132,12 @@ class Chore {
   final DateTime dueDate;
   final bool isCompleted;
   final String frequency;
+
+  /// Droits de l'utilisateur connecté, calculés par le serveur :
+  /// valider (colocataire assigné), réassigner (assigné ou créateur), supprimer (créateur).
+  final bool canComplete;
+  final bool canReassign;
+  final bool canDelete;
 
   Chore copyWith({
     String? id,
@@ -142,6 +155,9 @@ class Chore {
     dueDate: dueDate ?? this.dueDate,
     isCompleted: isCompleted ?? this.isCompleted,
     frequency: frequency ?? this.frequency,
+    canComplete: canComplete,
+    canReassign: canReassign,
+    canDelete: canDelete,
   );
 
   factory Chore.fromJson(Map<String, dynamic> json) => Chore(
@@ -152,7 +168,38 @@ class Chore {
     dueDate: DateTime.tryParse((json['dueDate'] ?? '').toString()) ?? DateTime.now(),
     isCompleted: json['isCompleted'] == true,
     frequency: (json['frequency'] ?? 'Hebdomadaire').toString(),
+    canComplete: json['canComplete'] == true,
+    canReassign: json['canReassign'] == true,
+    canDelete: json['canDelete'] == true,
   );
+
+  /// Fréquences proposées à la création d'une tâche.
+  static const frequencies = ['Une seule fois', 'Quotidien', 'Hebdomadaire', 'Mensuel', 'Annuel'];
+
+  /// Une tâche à faire n'est affichée que pendant sa période (ou si elle est en retard) :
+  /// le jour même pour « Quotidien », la semaine en cours pour « Hebdomadaire »,
+  /// le mois en cours pour « Mensuel », l'année en cours pour « Annuel ».
+  /// L'occurrence suivante, déjà créée par le serveur, reste masquée jusque-là.
+  bool isInCurrentPeriod(DateTime now) {
+    final due = dueDate.toLocal();
+    final today = DateTime(now.year, now.month, now.day);
+    switch (frequency) {
+      case 'Quotidien':
+        return !DateTime(due.year, due.month, due.day).isAfter(today);
+      case 'Hebdomadaire':
+        return !_weekStart(due).isAfter(_weekStart(today));
+      case 'Mensuel':
+        return due.year < now.year || (due.year == now.year && due.month <= now.month);
+      case 'Annuel':
+        return due.year <= now.year;
+      default:
+        return true;
+    }
+  }
+
+  /// Lundi de la semaine qui contient [d].
+  static DateTime _weekStart(DateTime d) =>
+      DateTime(d.year, d.month, d.day).subtract(Duration(days: d.weekday - 1));
 
   Map<String, dynamic> toJson() => {
     'title': title,
@@ -177,6 +224,7 @@ class Expense {
     this.isSettlement = false,
     this.reimbursedToId,
     this.reimbursedToName,
+    this.canDelete = false,
   });
 
   final String id;
@@ -192,6 +240,9 @@ class Expense {
   final bool isSettlement;
   final String? reimbursedToId;
   final String? reimbursedToName;
+
+  /// `true` si l'utilisateur connecté a saisi cette opération (seul lui peut la supprimer).
+  final bool canDelete;
 
   factory Expense.fromJson(Map<String, dynamic> json) {
     final rawParticipants = json['participantIds'];
@@ -212,6 +263,7 @@ class Expense {
       isSettlement: json['isSettlement'] == true,
       reimbursedToId: json['reimbursedToId']?.toString(),
       reimbursedToName: json['reimbursedToName']?.toString(),
+      canDelete: json['canDelete'] == true,
     );
   }
 
@@ -240,6 +292,15 @@ class BalanceDue {
   final String toId;
   final String toPerson;
   final double amount;
+
+  /// Remboursement enregistrable par l'utilisateur connecté : par la personne qui rembourse,
+  /// ou par la personne remboursée si le débiteur n'a pas de compte (même règle que le serveur).
+  bool canBeSettledBy(Roommate? me, Map<String, Roommate> membersById) {
+    if (me == null) return false;
+    final debtor = membersById[fromId];
+    if (debtor != null && debtor.hasAccount) return debtor.id == me.id;
+    return toId == me.id;
+  }
 }
 
 /// Calcule les remboursements simplifiés à partir de la répartition figée de chaque dépense.

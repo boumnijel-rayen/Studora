@@ -10,9 +10,29 @@ const {
   findColocationEntry,
 } = require('../../../utils/colocation');
 
-const EXPENSE_POPULATE = { paidBy: true, reimbursedTo: true, participants: true };
+const EXPENSE_POPULATE = { paidBy: true, reimbursedTo: true, participants: true, owner: true };
 
-function serializeExpense(expense) {
+/** Chacun ne gère que ce qui le concerne. Un colocataire sans compte est géré par les autres. */
+const expenseRules = {
+  /** Payeur d'une nouvelle dépense : soi-même, ou un colocataire sans compte. */
+  canRecordPayment(payer, user) {
+    return !payer.user || payer.user.id === user.id;
+  },
+  /**
+   * Remboursement : enregistré par la personne qui rembourse ; si elle n'a pas de compte,
+   * par la personne remboursée (qui confirme avoir reçu l'argent).
+   */
+  canSettle(from, to, user) {
+    if (from.user) return from.user.id === user.id;
+    return Boolean(to.user) && to.user.id === user.id;
+  },
+  /** Suppression : uniquement par la personne qui a saisi la dépense ou le remboursement. */
+  canDelete(expense, user) {
+    return Boolean(expense.owner) && expense.owner.id === user.id;
+  },
+};
+
+function serializeExpense(expense, user) {
   return {
     documentId: expense.documentId,
     title: expense.title,
@@ -25,6 +45,7 @@ function serializeExpense(expense) {
     isSettlement: expense.isSettlement === true,
     date: expense.date,
     category: expense.category,
+    canDelete: expenseRules.canDelete(expense, user),
   };
 }
 
@@ -39,7 +60,7 @@ async function resolveParticipantIds(strapi, colocation, rawIds) {
   return ids.every((id) => allowed.has(id)) ? ids : null;
 }
 
-module.exports = createCoreController(UID, ({ strapi }) => ({
+const controller = createCoreController(UID, ({ strapi }) => ({
   async find(ctx) {
     const membership = await requireMembership(ctx, strapi);
     if (!membership) return;
@@ -49,7 +70,10 @@ module.exports = createCoreController(UID, ({ strapi }) => ({
       sort: { date: 'desc' },
       populate: EXPENSE_POPULATE,
     });
-    return { data: entries.map(serializeExpense), meta: { count: entries.length } };
+    return {
+      data: entries.map((e) => serializeExpense(e, membership.user)),
+      meta: { count: entries.length },
+    };
   },
 
   async findOne(ctx) {
@@ -58,7 +82,7 @@ module.exports = createCoreController(UID, ({ strapi }) => ({
 
     const entry = await findColocationEntry(strapi, UID, membership.colocation, ctx.params.id, EXPENSE_POPULATE);
     if (!entry) return ctx.notFound('Dépense introuvable.');
-    return { data: serializeExpense(entry) };
+    return { data: serializeExpense(entry, membership.user) };
   },
 
   async create(ctx) {
@@ -76,6 +100,11 @@ module.exports = createCoreController(UID, ({ strapi }) => ({
     const payer = await findColocationMember(strapi, colocation, raw.paidById);
     if (!payer) {
       return ctx.badRequest('Le payeur doit être un membre de la colocation.');
+    }
+    if (!expenseRules.canRecordPayment(payer, user)) {
+      return ctx.forbidden(
+        'Vous ne pouvez enregistrer que vos propres dépenses (ou celles d\'un colocataire sans compte).',
+      );
     }
 
     const participantIds = await resolveParticipantIds(strapi, colocation, raw.participantIds);
@@ -100,7 +129,7 @@ module.exports = createCoreController(UID, ({ strapi }) => ({
     });
 
     ctx.status = 201;
-    return { data: serializeExpense(created) };
+    return { data: serializeExpense(created, user) };
   },
 
   async settle(ctx) {
@@ -115,6 +144,9 @@ module.exports = createCoreController(UID, ({ strapi }) => ({
 
     if (!from || !to || from.documentId === to.documentId || !(amount > 0)) {
       return ctx.badRequest('Deux membres différents et un montant positif sont requis.');
+    }
+    if (!expenseRules.canSettle(from, to, user)) {
+      return ctx.forbidden('Seule la personne qui rembourse peut enregistrer ce remboursement.');
     }
 
     const created = await strapi.documents(UID).create({
@@ -135,17 +167,25 @@ module.exports = createCoreController(UID, ({ strapi }) => ({
     });
 
     ctx.status = 201;
-    return { data: serializeExpense(created) };
+    return { data: serializeExpense(created, user) };
   },
 
   async delete(ctx) {
     const membership = await requireMembership(ctx, strapi);
     if (!membership) return;
 
-    const expense = await findColocationEntry(strapi, UID, membership.colocation, ctx.params.id);
+    const expense = await findColocationEntry(strapi, UID, membership.colocation, ctx.params.id, {
+      owner: true,
+    });
     if (!expense) return ctx.notFound('Dépense introuvable.');
+    if (!expenseRules.canDelete(expense, membership.user)) {
+      return ctx.forbidden('Seule la personne qui a saisi cette opération peut la supprimer.');
+    }
 
     await strapi.documents(UID).delete({ documentId: expense.documentId });
     return { data: { documentId: expense.documentId, deleted: true } };
   },
 }));
+
+module.exports = controller;
+module.exports.expenseRules = expenseRules;

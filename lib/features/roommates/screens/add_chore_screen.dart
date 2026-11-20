@@ -6,6 +6,7 @@ import '../../../core/core.dart';
 import '../models/roommate_models.dart';
 import '../providers/roommates_providers.dart';
 import '../roommates_routes.dart';
+import 'roommate_picker.dart';
 
 class AddChoreScreen extends ConsumerStatefulWidget {
   const AddChoreScreen({super.key});
@@ -19,7 +20,8 @@ class _AddChoreScreenState extends ConsumerState<AddChoreScreen> {
   final _titleCtrl = TextEditingController();
   String? _assignedToId;
   String _frequency = 'Hebdomadaire';
-  DateTime _dueDate = DateTime.now().add(const Duration(days: 3));
+  // Aujourd'hui par défaut : une tâche datée plus tard n'apparaît qu'à partir de sa période.
+  DateTime _dueDate = DateTime.now();
   bool _saving = false;
 
   @override
@@ -72,7 +74,6 @@ class _AddChoreScreenState extends ConsumerState<AddChoreScreen> {
   @override
   Widget build(BuildContext context) {
     final members = ref.watch(roommatesProvider);
-    final names = {for (final m in members) m.id: m.name};
 
     return AppScaffold(
       title: 'Nouvelle Tâche',
@@ -92,23 +93,23 @@ class _AddChoreScreenState extends ConsumerState<AddChoreScreen> {
               AppSpacing.gapMd,
               Row(
                 children: [
-                  Expanded(
-                    child: AppDropdownField<String>(
-                      label: 'Assignée à',
-                      value: _effectiveAssignee(members),
-                      hint: 'Choisir le colocataire',
-                      items: names.keys.toList(),
-                      itemLabel: (id) => names[id] ?? '',
-                      onChanged: (v) => setState(() => _assignedToId = v),
+                  const Expanded(
+                    child: Text(
+                      'Assignée à',
+                      style: TextStyle(fontWeight: FontWeight.w600),
                     ),
                   ),
-                  AppSpacing.gapXs,
-                  IconButton(
-                    tooltip: 'Nouveau colocataire',
-                    icon: const Icon(Icons.person_add_alt_1_rounded),
+                  TextButton.icon(
+                    icon: const Icon(Icons.person_add_alt_1_rounded, size: 18),
+                    label: const Text('Nouveau colocataire'),
                     onPressed: () => context.push(RoommatesRoutes.newRoommate),
                   ),
                 ],
+              ),
+              RoommatePicker(
+                members: members,
+                selectedId: _effectiveAssignee(members),
+                onSelected: (id) => setState(() => _assignedToId = id),
               ),
               AppSpacing.gapMd,
               AppDateField(
@@ -125,7 +126,7 @@ class _AddChoreScreenState extends ConsumerState<AddChoreScreen> {
               Wrap(
                 spacing: AppSpacing.xs,
                 children: [
-                  for (final f in ['Une seule fois', 'Quotidien', 'Hebdomadaire', 'Mensuel'])
+                  for (final f in Chore.frequencies)
                     ChoiceChip(
                       label: Text(f),
                       selected: _frequency == f,
