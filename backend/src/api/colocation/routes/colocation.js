@@ -1,6 +1,9 @@
 'use strict';
 
-module.exports = {
+const { FEATURES } = require('../../../utils/subscription/plans');
+const { requireFeature } = require('../../../utils/subscription/with-feature');
+
+module.exports = requireFeature(FEATURES.ROOMMATES, {
   routes: [
     {
       method: 'GET',
@@ -23,4 +26,4 @@ module.exports = {
       handler: 'colocation.leave',
     },
   ],
-};
+});

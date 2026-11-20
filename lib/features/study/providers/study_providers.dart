@@ -95,17 +95,6 @@ class StudyTasksAsyncNotifier extends AsyncNotifier<List<StudyTask>> {
     ]);
   }
 
-  Future<void> updateTask(StudyTask updated) async {
-    final client = ref.read(strapiClientProvider);
-    final response = await client.put('/study-tasks/${updated.id}', body: updated.toJson());
-    final saved = StudyTask.fromJson(StrapiClient.unwrapMap(response));
-    final current = state.asData?.value ?? const <StudyTask>[];
-    state = AsyncData([
-      for (final t in current)
-        if (t.id == updated.id) saved else t,
-    ]);
-  }
-
   Future<void> delete(String id) async {
     final client = ref.read(strapiClientProvider);
     await client.delete('/study-tasks/$id');

@@ -7,10 +7,12 @@ plugins {
 
 android {
     namespace = "com.studora.studora"
-    compileSdk = flutter.compileSdkVersion
-    ndkVersion = flutter.ndkVersion
+    compileSdk = 36
+    ndkVersion = "27.0.12077973"
 
     compileOptions {
+        // Requis par flutter_local_notifications (notifications de colocation).
+        isCoreLibraryDesugaringEnabled = true
         sourceCompatibility = JavaVersion.VERSION_11
         targetCompatibility = JavaVersion.VERSION_11
     }
@@ -24,7 +26,7 @@ android {
         applicationId = "com.studora.studora"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
-        minSdk = flutter.minSdkVersion
+        minSdk = 23
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
@@ -41,4 +43,9 @@ android {
 
 flutter {
     source = "../.."
+}
+
+dependencies {
+    // Requis par flutter_local_notifications (notifications de colocation).
+    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")
 }

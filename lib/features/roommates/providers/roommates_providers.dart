@@ -8,8 +8,14 @@ class ColocationAsyncNotifier extends AsyncNotifier<Colocation?> {
   @override
   Future<Colocation?> build() async {
     final user = ref.watch(currentUserProvider);
+    ref.watch(subscriptionProvider);
     if (user == null) return null;
-    return _fetchColocation();
+    try {
+      return await _fetchColocation();
+    } on ApiException catch (e) {
+      if (e.isPlanRequired) return null;
+      rethrow;
+    }
   }
 
   Future<Colocation?> _fetchColocation() async {
@@ -149,6 +155,12 @@ final roommatesProvider = Provider<List<Roommate>>((ref) {
   return all.where((r) => r.isActive).toList();
 });
 
+/// Tous les membres (anciens compris) par identifiant.
+final roommatesByIdProvider = Provider<Map<String, Roommate>>((ref) {
+  final all = ref.watch(roommatesAsyncProvider).value ?? const <Roommate>[];
+  return {for (final r in all) r.id: r};
+});
+
 /// Fiche de l'utilisateur connecté dans sa colocation.
 final currentRoommateProvider = Provider<Roommate?>((ref) {
   return ref.watch(roommatesProvider).where((r) => r.isMe).firstOrNull;
@@ -183,11 +195,16 @@ class ChoresAsyncNotifier extends AsyncNotifier<List<Chore>> {
     return created;
   }
 
+  /// Tâches en cours de mise à jour : un double appui ne doit pas valider puis annuler.
+  final _updating = <String>{};
+
   Future<void> toggle(String id) async {
+    if (_updating.contains(id)) return;
     final current = state.value ?? const <Chore>[];
     final target = current.where((c) => c.id == id).firstOrNull;
     if (target == null) return;
     final nextVal = !target.isCompleted;
+    _updating.add(id);
 
     state = AsyncData([
       for (final c in current)
@@ -199,11 +216,24 @@ class ChoresAsyncNotifier extends AsyncNotifier<List<Chore>> {
       await client.put('/chores/$id', body: {'isCompleted': nextVal});
     } catch (_) {
       state = AsyncData(current);
+      _updating.remove(id);
       rethrow;
     }
 
     // Le serveur crée ou retire l'occurrence suivante des tâches récurrentes.
     state = await AsyncValue.guard(_fetchChores);
+    _updating.remove(id);
+  }
+
+  /// Réassigne une tâche à un autre colocataire.
+  Future<void> reassign(String choreId, String roommateId) async {
+    final client = ref.read(strapiClientProvider);
+    final response = await client.put('/chores/$choreId', body: {'assignedToId': roommateId});
+    final updated = Chore.fromJson(StrapiClient.unwrapMap(response));
+    final current = state.value ?? const <Chore>[];
+    state = AsyncData([
+      for (final c in current) c.id == choreId ? updated : c,
+    ]);
   }
 
   Future<void> delete(String id) async {
@@ -221,6 +251,17 @@ final choresAsyncProvider =
 
 final choresProvider = Provider<List<Chore>>((ref) {
   return ref.watch(choresAsyncProvider).value ?? const [];
+});
+
+/// Tâches à faire de la période en cours (ou en retard), les plus urgentes d'abord.
+/// Les occurrences suivantes des tâches récurrentes restent masquées jusqu'à leur période.
+final visiblePendingChoresProvider = Provider<List<Chore>>((ref) {
+  final now = DateTime.now();
+  return ref
+      .watch(choresProvider)
+      .where((c) => !c.isCompleted && c.isInCurrentPeriod(now))
+      .toList()
+    ..sort((a, b) => a.dueDate.compareTo(b.dueDate));
 });
 
 /// Gestion des dépenses partagées et remboursements connectée à `/expenses`.
@@ -247,9 +288,15 @@ class ExpensesAsyncNotifier extends AsyncNotifier<List<Expense>> {
     final client = ref.read(strapiClientProvider);
     final response = await client.post('/expenses', body: e.toJson());
     final created = Expense.fromJson(StrapiClient.unwrapMap(response));
-    final current = state.value ?? const <Expense>[];
-    state = AsyncData([created, ...current]);
+    state = AsyncData(_withNewest(created));
     return created;
+  }
+
+  /// Ajoute [created] en gardant l'ordre du serveur (date la plus récente d'abord),
+  /// pour qu'une dépense datée d'hier ne s'affiche pas en tête de liste.
+  List<Expense> _withNewest(Expense created) {
+    final current = state.value ?? const <Expense>[];
+    return [...current, created]..sort((a, b) => b.date.compareTo(a.date));
   }
 
   /// Enregistre un remboursement via l'endpoint personnalisé `POST /expenses/settle`.
@@ -265,8 +312,7 @@ class ExpensesAsyncNotifier extends AsyncNotifier<List<Expense>> {
       wrapData: false,
     );
     final created = Expense.fromJson(StrapiClient.unwrapMap(response));
-    final current = state.value ?? const <Expense>[];
-    state = AsyncData([created, ...current]);
+    state = AsyncData(_withNewest(created));
     return created;
   }
 

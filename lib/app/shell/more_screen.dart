@@ -13,6 +13,7 @@ class MoreScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final user = ref.watch(currentUserProvider);
     final prefs = ref.watch(preferencesProvider);
+    final subscription = ref.watch(subscriptionProvider);
 
     // Modules ayant leur entrée dans « Plus »
     final moreModules = appModules
@@ -55,49 +56,38 @@ class MoreScreen extends ConsumerWidget {
           ),
           AppSpacing.gapLg,
 
-          const AppSectionHeader(title: 'Espaces & Outils'),
-          for (final mod in moreModules) ...[
-            AppCard(
-              onTap: () => context.go(mod.entry.rootPath),
-              child: Row(
-                children: [
-                  AppIconBox(icon: mod.entry.selectedIcon, color: mod.entry.color),
-                  AppSpacing.gapMd,
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(mod.entry.label, style: context.text.titleSmall),
-                        if (mod.entry.description.isNotEmpty) ...[
-                          const SizedBox(height: 2),
-                          Text(mod.entry.description, style: context.text.bodySmall),
-                        ],
-                      ],
-                    ),
-                  ),
-                  Icon(Icons.chevron_right_rounded, color: context.colors.textSecondary),
-                ],
-              ),
-            ),
-            AppSpacing.gapSm,
-          ],
-
-          AppSpacing.gapMd,
-          const AppSectionHeader(title: 'Laboratoire & Développement'),
+          const AppSectionHeader(title: 'Abonnement'),
           AppCard(
-            onTap: () => context.push('/dev/design-system'),
+            onTap: () => context.push(kSubscriptionRoute),
             child: Row(
               children: [
-                const AppIconBox(icon: Icons.palette_rounded, color: AppColors.secondary),
+                AppIconBox(
+                  icon: subscription.plan.icon,
+                  color: subscription.plan.accentColor,
+                ),
                 AppSpacing.gapMd,
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text('Galerie du Design System', style: context.text.titleSmall),
+                      Row(
+                        children: [
+                          Flexible(
+                            child: Text(
+                              'Formule ${subscription.plan.name}',
+                              style: context.text.titleSmall,
+                            ),
+                          ),
+                          AppSpacing.gapXs,
+                          SubscriptionStatusBadge(
+                            status: subscription.status,
+                            cancelAtPeriodEnd: subscription.cancelAtPeriodEnd,
+                          ),
+                        ],
+                      ),
                       const SizedBox(height: 2),
                       Text(
-                        'Vitrine des composants, tokens et variantes',
+                        '${subscription.plan.shortPriceLabel} • Consulter ou changer de plan',
                         style: context.text.bodySmall,
                       ),
                     ],
@@ -107,6 +97,65 @@ class MoreScreen extends ConsumerWidget {
               ],
             ),
           ),
+          AppSpacing.gapLg,
+
+          const AppSectionHeader(title: 'Espaces & Outils'),
+          for (final mod in moreModules) ...[
+            Builder(
+              builder: (context) {
+                final requiredFeature = mod.requiredFeature;
+                final isLocked =
+                    requiredFeature != null && !subscription.hasFeature(requiredFeature);
+                return AppCard(
+                  onTap: () => isLocked
+                      ? context.push(lockedFeatureRoute(requiredFeature))
+                      : context.go(mod.entry.rootPath),
+                  child: Row(
+                    children: [
+                      AppIconBox(icon: mod.entry.selectedIcon, color: mod.entry.color),
+                      AppSpacing.gapMd,
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Flexible(
+                                  child: Text(
+                                    mod.entry.label,
+                                    style: context.text.titleSmall,
+                                  ),
+                                ),
+                                if (isLocked) ...[
+                                  AppSpacing.gapXs,
+                                  Icon(
+                                    Icons.lock_rounded,
+                                    size: 15,
+                                    color: requiredFeature.minimumPlan.accentColor,
+                                  ),
+                                ],
+                              ],
+                            ),
+                            if (mod.entry.description.isNotEmpty) ...[
+                              const SizedBox(height: 2),
+                              Text(
+                                isLocked
+                                    ? 'Plan ${requiredFeature.minimumPlan.name} requis (${requiredFeature.minimumPlan.shortPriceLabel})'
+                                    : mod.entry.description,
+                                style: context.text.bodySmall,
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
+                      Icon(Icons.chevron_right_rounded, color: context.colors.textSecondary),
+                    ],
+                  ),
+                );
+              },
+            ),
+            AppSpacing.gapSm,
+          ],
 
           AppSpacing.gapLg,
           const AppSectionHeader(title: 'Apparence & Session'),

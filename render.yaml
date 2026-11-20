@@ -57,3 +57,15 @@ services:
         sync: false
       - key: DATABASE_PASSWORD
         sync: false
+      # Stripe (abonnements Plus / Ultimate)
+      - key: STRIPE_SECRET_KEY
+        sync: false
+      - key: STRIPE_PUBLISHABLE_KEY
+        sync: false
+      - key: STRIPE_WEBHOOK_SECRET
+        sync: false
+      - key: STRIPE_PRICE_PLUS
+        sync: false
+      - key: STRIPE_PRICE_ULTIMATE
+        sync: false
+

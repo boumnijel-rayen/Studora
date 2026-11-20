@@ -188,47 +188,6 @@ class SubjectChip extends StatelessWidget {
   );
 }
 
-/// Rangée de filtres à choix unique, défilante horizontalement.
-class AppFilterChips<T> extends StatelessWidget {
-  const AppFilterChips({
-    super.key,
-    required this.options,
-    required this.selected,
-    required this.onSelected,
-    this.padding = AppSpacing.screen,
-  });
-
-  /// valeur → libellé
-  final Map<T, String> options;
-  final T selected;
-  final ValueChanged<T> onSelected;
-  final EdgeInsetsGeometry padding;
-
-  @override
-  Widget build(BuildContext context) {
-    final c = context.colors;
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      padding: padding,
-      child: Row(
-        children: [
-          for (final e in options.entries) ...[
-            ChoiceChip(
-              label: Text(e.value),
-              selected: e.key == selected,
-              onSelected: (_) => onSelected(e.key),
-              labelStyle: context.text.labelMedium?.copyWith(
-                color: e.key == selected ? c.primary : c.textSecondary,
-              ),
-            ),
-            AppSpacing.gapXs,
-          ],
-        ],
-      ),
-    );
-  }
-}
-
 /// Avatar à initiales (couleur déduite du nom).
 class AppAvatar extends StatelessWidget {
   const AppAvatar({super.key, required this.name, this.size = AppSizes.avatarMd, this.color, this.showOnline = false});

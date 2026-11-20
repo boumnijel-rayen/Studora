@@ -1,0 +1,78 @@
+{
+  "kind": "collectionType",
+  "collectionName": "subscriptions",
+  "info": {
+    "singularName": "subscription",
+    "pluralName": "subscriptions",
+    "displayName": "Subscription",
+    "description": "Abonnement actuel d'un utilisateur (miroir synchronisé de Stripe via webhooks)"
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "attributes": {
+    "owner": {
+      "type": "relation",
+      "relation": "oneToOne",
+      "target": "plugin::users-permissions.user"
+    },
+    "plan": {
+      "type": "enumeration",
+      "enum": ["core", "plus", "ultimate"],
+      "default": "core",
+      "required": true
+    },
+    "status": {
+      "type": "enumeration",
+      "enum": [
+        "active",
+        "trialing",
+        "past_due",
+        "incomplete",
+        "unpaid",
+        "paused",
+        "canceled",
+        "expired"
+      ],
+      "default": "active",
+      "required": true
+    },
+    "pendingPlan": {
+      "type": "enumeration",
+      "enum": ["core", "plus", "ultimate"]
+    },
+    "cancelAtPeriodEnd": {
+      "type": "boolean",
+      "default": false
+    },
+    "currentPeriodStart": {
+      "type": "datetime"
+    },
+    "currentPeriodEnd": {
+      "type": "datetime"
+    },
+    "canceledAt": {
+      "type": "datetime"
+    },
+    "endedAt": {
+      "type": "datetime"
+    },
+    "lastPaymentError": {
+      "type": "string"
+    },
+    "stripeCustomerId": {
+      "type": "string",
+      "unique": true,
+      "private": true
+    },
+    "stripeSubscriptionId": {
+      "type": "string",
+      "unique": true,
+      "private": true
+    },
+    "stripePriceId": {
+      "type": "string",
+      "private": true
+    }
+  }
+}

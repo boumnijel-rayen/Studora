@@ -15,9 +15,13 @@ module.exports = ({ env }) => [
   'strapi::query',
   {
     name: 'strapi::body',
-    // 8 Mo : l'import de notes par IA envoie un fichier de 4 Mo maximum encodé en base64.
-    config: { jsonLimit: '8mb' },
+    config: {
+      // 8 Mo : l'import de notes par IA envoie un fichier de 4 Mo maximum encodé en base64.
+      jsonLimit: '8mb',
+      includeUnparsed: true,
+    },
   },
+  'global::password-reset',
   'strapi::session',
   'strapi::favicon',
   'strapi::public',

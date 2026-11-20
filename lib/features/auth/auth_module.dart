@@ -11,13 +11,11 @@ import 'screens/profile_screen.dart';
 import 'screens/register_screen.dart';
 import 'screens/settings_screen.dart';
 import 'screens/splash_screen.dart';
+import 'screens/subscription_screen.dart';
 
 /// Module 1 — Utilisateurs & Profil (Membre 1 / Lead).
 class AuthModule extends FeatureModule {
   const AuthModule();
-
-  @override
-  String get id => 'auth';
 
   @override
   ModuleEntry get entry => const ModuleEntry(
@@ -54,6 +52,11 @@ class AuthModule extends FeatureModule {
         GoRoute(
           path: 'settings',
           builder: (_, _) => const SettingsScreen(),
+        ),
+        GoRoute(
+          path: 'subscription',
+          parentNavigatorKey: AppNavigator.rootKey,
+          builder: (_, _) => const SubscriptionScreen(),
         ),
       ],
     ),

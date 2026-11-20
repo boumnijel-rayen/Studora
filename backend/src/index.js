@@ -6,6 +6,8 @@ const PUBLIC_PERMISSIONS = [
   'plugin::users-permissions.auth.forgotPassword',
   'plugin::users-permissions.auth.resetPassword',
   'api::app-setting.app-setting.find',
+  'api::subscription.subscription.plans',
+  'api::subscription.subscription.webhook',
 ];
 
 const AUTHENTICATED_PERMISSIONS = [
@@ -14,6 +16,13 @@ const AUTHENTICATED_PERMISSIONS = [
   'plugin::users-permissions.user.updateMe',
   'plugin::users-permissions.user.update',
   'plugin::users-permissions.auth.changePassword',
+  'api::subscription.subscription.me',
+  'api::subscription.subscription.history',
+  'api::subscription.subscription.paymentSheet',
+  'api::subscription.subscription.change',
+  'api::subscription.subscription.cancel',
+  'api::subscription.subscription.resume',
+  'api::subscription.subscription.sync',
   'api::user-preference.user-preference.findMine',
   'api::user-preference.user-preference.updateMine',
   'api::subject.subject.find',
@@ -90,6 +99,8 @@ const AUTHENTICATED_PERMISSIONS = [
   'api::expense.expense.settle',
 ];
 
+const crypto = require('node:crypto');
+
 async function ensureRolePermissions(strapi, roleType, actions) {
   const role = await strapi.db
     .query('plugin::users-permissions.role')
@@ -115,6 +126,22 @@ module.exports = {
   async bootstrap({ strapi }) {
     await ensureRolePermissions(strapi, 'public', PUBLIC_PERMISSIONS);
     await ensureRolePermissions(strapi, 'authenticated', AUTHENTICATED_PERMISSIONS);
+
+    // Crée automatiquement un abonnement Core gratuit à la création de chaque utilisateur.
+    strapi.db.lifecycles.subscribe({
+      models: ['plugin::users-permissions.user'],
+      async afterCreate(event) {
+        const userId = event.result?.id;
+        if (!userId) return;
+        try {
+          await strapi.service('api::subscription.subscription').ensureForUser(userId);
+        } catch (err) {
+          strapi.log.warn(
+            `[subscription] Initialisation du plan Core ignorée pour l'utilisateur ${userId} : ${err.message}`,
+          );
+        }
+      },
+    });
   },
 };
 

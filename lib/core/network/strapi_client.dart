@@ -25,6 +25,7 @@ class StrapiClient {
     String? baseUrl,
     HttpTransport? transport,
     this.onUnauthorized,
+    this.onPlanRequired,
   })  : _tokenStorage = tokenStorage,
         _baseUrl = baseUrl ?? ApiConfig.apiBaseUrl,
         _transport = transport ?? platform.defaultHttpTransport;
@@ -33,6 +34,7 @@ class StrapiClient {
   final String _baseUrl;
   final HttpTransport _transport;
   final void Function()? onUnauthorized;
+  final void Function()? onPlanRequired;
 
   Uri _buildUri(String path, [Map<String, dynamic>? queryParameters]) {
     var normalizedPath = path.startsWith('/') ? path : '/$path';
@@ -208,6 +210,15 @@ class StrapiClient {
     }
 
     if (status == 403) {
+      if (errorDetails?['code'] == 'PLAN_UPGRADE_REQUIRED') {
+        onPlanRequired?.call();
+        throw ApiException(
+          kind: ApiErrorKind.planRequired,
+          statusCode: status,
+          message: errorMessage ?? 'Cette fonctionnalité nécessite un plan d\'abonnement supérieur.',
+          details: errorDetails,
+        );
+      }
       throw ApiException(
         kind: ApiErrorKind.forbidden,
         statusCode: status,
@@ -367,6 +378,17 @@ class SessionExpiredNotifier extends Notifier<int> {
 final sessionExpiredProvider =
     NotifierProvider<SessionExpiredNotifier, int>(SessionExpiredNotifier.new);
 
+/// Compteur incrémenté lorsqu'un appel API retourne 403 PLAN_UPGRADE_REQUIRED.
+class PlanRequiredSignalNotifier extends Notifier<int> {
+  @override
+  int build() => 0;
+
+  void notify() => state++;
+}
+
+final planRequiredSignalProvider =
+    NotifierProvider<PlanRequiredSignalNotifier, int>(PlanRequiredSignalNotifier.new);
+
 final strapiClientProvider = Provider<StrapiClient>((ref) {
   final storage = ref.watch(tokenStorageProvider);
   return StrapiClient(
@@ -374,6 +396,9 @@ final strapiClientProvider = Provider<StrapiClient>((ref) {
     onUnauthorized: () {
       storage.clearToken();
       ref.read(sessionExpiredProvider.notifier).notifyExpired();
+    },
+    onPlanRequired: () {
+      ref.read(planRequiredSignalProvider.notifier).notify();
     },
   );
 });

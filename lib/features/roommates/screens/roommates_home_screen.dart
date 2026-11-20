@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../../core/core.dart';
 import '../providers/roommates_providers.dart';
 import '../roommates_routes.dart';
+import '../services/colocation_message_notifications.dart';
 import 'colocation_info_card.dart';
 import 'colocation_setup_screen.dart';
 
@@ -49,10 +50,12 @@ class _ColocationDashboard extends ConsumerWidget {
     final monthlyTotal = ref.watch(monthlyExpensesTotalProvider);
     final chores = choresAsync.value ?? const [];
     final sharedExpenses = ref.watch(sharedExpensesProvider);
-    final pendingChores = chores.where((c) => !c.isCompleted).toList();
+    // Tâches de la période en cours ou en retard (les suivantes restent masquées).
+    final pendingChores = ref.watch(visiblePendingChoresProvider);
     final balances = ref.watch(balancesDueProvider);
     final netBalance = ref.watch(netUserBalanceProvider);
     final currency = ref.watch(preferencesProvider).currency;
+    final unreadMessages = ref.watch(colocationUnreadCountProvider);
 
     final hasError = roommatesAsync.hasError || choresAsync.hasError || expensesAsync.hasError;
     final errorObj = roommatesAsync.error ?? choresAsync.error ?? expensesAsync.error;
@@ -67,8 +70,16 @@ class _ColocationDashboard extends ConsumerWidget {
       subtitle: 'Vie partagée & Dépenses',
       actions: [
         IconButton(
-          tooltip: 'Discussion',
-          icon: const Icon(Icons.chat_bubble_outline_rounded),
+          tooltip: unreadMessages > 0
+              ? 'Discussion ($unreadMessages nouveau${unreadMessages > 1 ? 'x' : ''} message${unreadMessages > 1 ? 's' : ''})'
+              : 'Discussion',
+          icon: Badge(
+            // Pastille rouge tant que des messages de colocataires n'ont pas été lus.
+            isLabelVisible: unreadMessages > 0,
+            smallSize: 9,
+            backgroundColor: AppColors.error,
+            child: const Icon(Icons.chat_bubble_outline_rounded),
+          ),
           onPressed: () => context.push(RoommatesRoutes.chat),
         ),
         IconButton(
@@ -83,6 +94,9 @@ class _ColocationDashboard extends ConsumerWidget {
           ? AppErrorState.fromError(
               errorObj!,
               onRetry: () {
+                // Relit aussi la colocation : si l'utilisateur en a été retiré,
+                // l'écran revient au choix « Rejoindre / Créer » au lieu de rester en erreur.
+                ref.read(colocationAsyncProvider.notifier).refresh();
                 ref.read(roommatesAsyncProvider.notifier).refresh();
                 ref.read(choresAsyncProvider.notifier).refresh();
                 ref.read(expensesAsyncProvider.notifier).refresh();
@@ -91,6 +105,7 @@ class _ColocationDashboard extends ConsumerWidget {
           : RefreshIndicator(
               onRefresh: () async {
                 await Future.wait([
+                  ref.read(colocationAsyncProvider.notifier).refresh(),
                   ref.read(roommatesAsyncProvider.notifier).refresh(),
                   ref.read(choresAsyncProvider.notifier).refresh(),
                   ref.read(expensesAsyncProvider.notifier).refresh(),
@@ -198,36 +213,44 @@ class _ColocationDashboard extends ConsumerWidget {
                           for (final r in roommates) ...[
                             AppCard(
                               padding: const EdgeInsets.all(AppSpacing.md),
-                              onTap: !r.canEdit
-                                  ? null
-                                  : () async {
-                                      try {
-                                        await ref
-                                            .read(roommatesAsyncProvider.notifier)
-                                            .togglePresence(r.id);
-                                      } catch (e) {
-                                        if (context.mounted) {
-                                          AppSnackbar.error(
-                                            context,
-                                            e is ApiException
-                                                ? e.message
-                                                : 'Impossible de modifier la présence.',
-                                          );
-                                        }
-                                      }
-                                    },
                               child: Column(
                                 children: [
                                   AppAvatar(name: r.name, size: 48, showOnline: r.isPresent),
                                   AppSpacing.gapSm,
-                                  Text(r.name.split(' ').first, style: context.text.labelLarge),
+                                  Text(
+                                    r.isMe ? 'Vous' : r.name.split(' ').first,
+                                    style: context.text.labelLarge,
+                                  ),
                                   Text(r.roomNumber, style: context.text.bodySmall),
                                   AppSpacing.gapXxs,
-                                  AppBadge(
-                                    label: r.isPresent ? 'Présent' : 'Absent',
-                                    tone: r.isPresent
-                                        ? AppBadgeTone.success
-                                        : AppBadgeTone.neutral,
+                                  // Présence : seulement sa propre fiche (ou celle d'un colocataire
+                                  // sans compte), en touchant le badge et non toute la carte.
+                                  InkWell(
+                                    borderRadius: AppRadius.brSm,
+                                    onTap: !r.canEdit
+                                        ? null
+                                        : () async {
+                                            try {
+                                              await ref
+                                                  .read(roommatesAsyncProvider.notifier)
+                                                  .togglePresence(r.id);
+                                            } catch (e) {
+                                              if (context.mounted) {
+                                                AppSnackbar.error(
+                                                  context,
+                                                  e is ApiException
+                                                      ? e.message
+                                                      : 'Impossible de modifier la présence.',
+                                                );
+                                              }
+                                            }
+                                          },
+                                    child: AppBadge(
+                                      label: r.isPresent ? 'Présent' : 'Absent',
+                                      tone: r.isPresent
+                                          ? AppBadgeTone.success
+                                          : AppBadgeTone.neutral,
+                                    ),
                                   ),
                                 ],
                               ),
@@ -257,23 +280,26 @@ class _ColocationDashboard extends ConsumerWidget {
                           children: [
                             Checkbox(
                               value: c.isCompleted,
-                              onChanged: (_) async {
-                                try {
-                                  await ref.read(choresAsyncProvider.notifier).toggle(c.id);
-                                  if (context.mounted) {
-                                    AppSnackbar.success(context, 'Tâche ménagère validée !');
-                                  }
-                                } catch (e) {
-                                  if (context.mounted) {
-                                    AppSnackbar.error(
-                                      context,
-                                      e is ApiException
-                                          ? e.message
-                                          : 'Impossible de mettre à jour la tâche.',
-                                    );
-                                  }
-                                }
-                              },
+                              // Seul le colocataire assigné valide sa tâche.
+                              onChanged: !c.canComplete
+                                  ? null
+                                  : (_) async {
+                                      try {
+                                        await ref.read(choresAsyncProvider.notifier).toggle(c.id);
+                                        if (context.mounted) {
+                                          AppSnackbar.success(context, 'Tâche ménagère validée !');
+                                        }
+                                      } catch (e) {
+                                        if (context.mounted) {
+                                          AppSnackbar.error(
+                                            context,
+                                            e is ApiException
+                                                ? e.message
+                                                : 'Impossible de mettre à jour la tâche.',
+                                          );
+                                        }
+                                      }
+                                    },
                             ),
                             AppSpacing.gapSm,
                             Expanded(

@@ -16,7 +16,10 @@ dependencies:
   flutter_riverpod: ^3.3.2
   go_router: ^17.0.0
   intl: ^0.20.2
-  uuid: ^4.6.0
+  flutter_stripe: ^13.0.0
+  # Notifications système des nouveaux messages de colocation (module Colocation).
+  flutter_local_notifications: ^19.5.0
+  # Choix du relevé de notes à analyser (import IA, module Notes).
   file_picker: ^13.4.0
 
 dev_dependencies:

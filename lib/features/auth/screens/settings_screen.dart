@@ -88,13 +88,6 @@ class SettingsScreen extends ConsumerWidget {
             padding: const EdgeInsets.symmetric(vertical: AppSpacing.xs),
             child: Column(
               children: [
-                const AppListTile(
-                  title: 'Langue de l\'application',
-                  subtitle: 'Français (France)',
-                  leading: Icon(Icons.language_rounded),
-                  trailing: Icon(Icons.check_rounded, color: AppColors.primary),
-                ),
-                const Divider(),
                 Padding(
                   padding: const EdgeInsets.all(AppSpacing.md),
                   child: Row(

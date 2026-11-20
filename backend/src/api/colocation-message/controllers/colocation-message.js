@@ -22,8 +22,15 @@ module.exports = createCoreController(MESSAGE_UID, ({ strapi }) => ({
     const membership = await requireMembership(ctx, strapi);
     if (!membership) return;
 
+    // `?since=<date ISO>` : uniquement les messages plus récents (vérification des
+    // nouveaux messages par l'application sans retélécharger toute la discussion).
+    const since = new Date(String(ctx.query?.since || ''));
+    const sinceFilter = Number.isNaN(since.getTime())
+      ? {}
+      : { timestamp: { $gt: since.toISOString() } };
+
     const entries = await strapi.documents(MESSAGE_UID).findMany({
-      filters: byColocation(membership.colocation),
+      filters: { ...byColocation(membership.colocation), ...sinceFilter },
       sort: { timestamp: 'desc' },
       limit: MAX_MESSAGES,
       populate: { sender: true },

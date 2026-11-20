@@ -50,13 +50,6 @@ class SubjectsAsyncNotifier extends AsyncNotifier<List<Subject>> {
     state = AsyncData([...current, created]);
     return created;
   }
-
-  Future<void> deleteSubject(String id) async {
-    final client = ref.read(strapiClientProvider);
-    await client.delete('/subjects/$id');
-    final current = state.asData?.value ?? const <Subject>[];
-    state = AsyncData(current.where((s) => s.id != id).toList());
-  }
 }
 
 final subjectsAsyncProvider =

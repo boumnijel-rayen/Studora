@@ -9,6 +9,7 @@ abstract final class AuthRoutes {
   static const profile = '/profile';
   static const editProfile = '/profile/edit';
   static const settings = '/profile/settings';
+  static const subscription = '/profile/subscription';
 
   /// Routes accessibles sans être connecté.
   static bool isPublic(String location) =>

@@ -5,7 +5,5 @@ abstract final class ScheduleRoutes {
   static String course(String id) => '/schedule/courses/$id';
   static const deadlines = '/schedule/deadlines';
   static const newDeadline = '/schedule/deadlines/new';
-  static String deadline(String id) => '/schedule/deadlines/$id';
   static const notifications = '/schedule/notifications';
-  static const reminderSettings = '/schedule/reminders';
 }

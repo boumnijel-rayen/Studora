@@ -16,7 +16,7 @@ class GroupsModule extends FeatureModule {
   const GroupsModule();
 
   @override
-  String get id => 'groups';
+  AppFeature? get requiredFeature => AppFeature.studyGroups;
 
   @override
   ModuleEntry get entry => const ModuleEntry(

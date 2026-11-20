@@ -12,6 +12,7 @@ class ProfileScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final user = ref.watch(currentUserProvider);
+    final subscription = ref.watch(subscriptionProvider);
     final subjectsAsync = ref.watch(subjectsAsyncProvider);
     final overallAvg = ref.watch(overallAverageProvider);
     final grades = ref.watch(gradesProvider);
@@ -69,6 +70,54 @@ class ProfileScreen extends ConsumerWidget {
                     textAlign: TextAlign.center,
                   ),
                 ],
+              ],
+            ),
+          ),
+          AppSpacing.gapLg,
+
+          // Abonnement actuel
+          const AppSectionHeader(title: 'Abonnement'),
+          AppCard(
+            onTap: () => context.push(AuthRoutes.subscription),
+            child: Row(
+              children: [
+                AppIconBox(
+                  icon: subscription.plan.icon,
+                  color: subscription.plan.accentColor,
+                ),
+                AppSpacing.gapMd,
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Flexible(
+                            child: Text(
+                              'Formule ${subscription.plan.name}',
+                              style: context.text.titleSmall,
+                            ),
+                          ),
+                          AppSpacing.gapXs,
+                          SubscriptionStatusBadge(
+                            status: subscription.status,
+                            cancelAtPeriodEnd: subscription.cancelAtPeriodEnd,
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        subscription.renewsAt != null
+                            ? '${subscription.plan.shortPriceLabel} • Renouvellement le ${Formatters.fullDate(subscription.renewsAt!.toLocal())}'
+                            : subscription.accessEndsAt != null
+                                ? 'Fin d\'accès le ${Formatters.fullDate(subscription.accessEndsAt!.toLocal())}'
+                                : '${subscription.plan.shortPriceLabel} • Gérer ou changer de formule',
+                        style: context.text.bodySmall,
+                      ),
+                    ],
+                  ),
+                ),
+                Icon(Icons.chevron_right_rounded, color: context.colors.textSecondary),
               ],
             ),
           ),

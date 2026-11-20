@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/core.dart';
 import '../models/roommate_models.dart';
 import '../providers/roommates_providers.dart';
+import 'roommate_picker.dart';
 
 class AddExpenseScreen extends ConsumerStatefulWidget {
   const AddExpenseScreen({super.key});
@@ -29,9 +30,16 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
     super.dispose();
   }
 
+  /// Payeurs possibles : soi-même, ou un colocataire sans compte (règle vérifiée par le serveur).
+  List<Roommate> _allowedPayers(List<Roommate> members) =>
+      members.where((m) => m.canRecordFor).toList();
+
   String? _effectivePayer(List<Roommate> members) {
-    if (members.any((m) => m.id == _paidById)) return _paidById;
-    return ref.read(currentRoommateProvider)?.id ?? members.firstOrNull?.id;
+    final allowed = _allowedPayers(members);
+    if (allowed.any((m) => m.id == _paidById)) return _paidById;
+    final me = ref.read(currentRoommateProvider);
+    if (me != null && allowed.any((m) => m.id == me.id)) return me.id;
+    return allowed.firstOrNull?.id;
   }
 
   Future<void> _save() async {
@@ -84,7 +92,6 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
   @override
   Widget build(BuildContext context) {
     final members = ref.watch(roommatesProvider);
-    final names = {for (final m in members) m.id: m.name};
     final currency = ref.watch(preferencesProvider).currency;
 
     return AppScaffold(
@@ -114,12 +121,17 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
                 ]),
               ),
               AppSpacing.gapMd,
-              AppDropdownField<String>(
-                label: 'Payé par',
-                value: _effectivePayer(members),
-                items: names.keys.toList(),
-                itemLabel: (id) => names[id] ?? '',
-                onChanged: (v) => setState(() => _paidById = v),
+              const Text('Payé par', style: TextStyle(fontWeight: FontWeight.w600)),
+              AppSpacing.gapXs,
+              RoommatePicker(
+                members: _allowedPayers(members),
+                selectedId: _effectivePayer(members),
+                onSelected: (id) => setState(() => _paidById = id),
+              ),
+              AppSpacing.gapXxs,
+              Text(
+                'Vous ne pouvez saisir que vos dépenses, ou celles d\'un colocataire sans compte.',
+                style: context.text.bodySmall,
               ),
               AppSpacing.gapMd,
               const Text('Partagée entre', style: TextStyle(fontWeight: FontWeight.w600)),

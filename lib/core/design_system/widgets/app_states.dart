@@ -207,7 +207,9 @@ class AppErrorState extends StatelessWidget {
     if (err is ApiException) {
       return switch (err.kind) {
         ApiErrorKind.network => Icons.cloud_off_rounded,
-        ApiErrorKind.unauthorized || ApiErrorKind.forbidden => Icons.lock_outline_rounded,
+        ApiErrorKind.unauthorized ||
+        ApiErrorKind.forbidden ||
+        ApiErrorKind.planRequired => Icons.lock_outline_rounded,
         ApiErrorKind.server => Icons.dns_outlined,
         ApiErrorKind.notFound => Icons.search_off_rounded,
         ApiErrorKind.validation => Icons.warning_amber_rounded,

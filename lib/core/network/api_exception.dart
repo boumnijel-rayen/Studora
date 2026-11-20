@@ -9,6 +9,9 @@ enum ApiErrorKind {
   /// Permissions insuffisantes pour cette ressource (HTTP 403).
   forbidden,
 
+  /// Fonctionnalité réservée à un plan d'abonnement supérieur (HTTP 403 PLAN_UPGRADE_REQUIRED).
+  planRequired,
+
   /// Ressource introuvable (HTTP 404).
   notFound,
 
@@ -36,16 +39,18 @@ class ApiException implements Exception {
   final int? statusCode;
   final Map<String, dynamic>? details;
 
-  bool get isNetwork => kind == ApiErrorKind.network;
   bool get isUnauthorized => kind == ApiErrorKind.unauthorized;
   bool get isForbidden => kind == ApiErrorKind.forbidden;
-  bool get isServer => kind == ApiErrorKind.server;
-  bool get isValidation => kind == ApiErrorKind.validation;
+  bool get isPlanRequired => kind == ApiErrorKind.planRequired;
+
+  String? get requiredPlan => details?['requiredPlan']?.toString();
+  String? get lockedFeature => details?['feature']?.toString();
 
   String get userTitle => switch (kind) {
     ApiErrorKind.network => 'Erreur de connexion réseau',
     ApiErrorKind.unauthorized => 'Session expirée',
     ApiErrorKind.forbidden => 'Accès non autorisé',
+    ApiErrorKind.planRequired => 'Abonnement supérieur requis',
     ApiErrorKind.notFound => 'Contenu introuvable',
     ApiErrorKind.validation => 'Données invalides',
     ApiErrorKind.server => 'Erreur du serveur',

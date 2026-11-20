@@ -1,0 +1,53 @@
+{
+  "kind": "collectionType",
+  "collectionName": "subscription_events",
+  "info": {
+    "singularName": "subscription-event",
+    "pluralName": "subscription-events",
+    "displayName": "Subscription Event",
+    "description": "Historique des événements d'abonnement (changements de plan, paiements) et idempotence des webhooks Stripe"
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "attributes": {
+    "stripeEventId": {
+      "type": "string",
+      "unique": true,
+      "private": true
+    },
+    "type": {
+      "type": "string",
+      "required": true
+    },
+    "owner": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "plugin::users-permissions.user"
+    },
+    "plan": {
+      "type": "enumeration",
+      "enum": ["core", "plus", "ultimate"]
+    },
+    "previousPlan": {
+      "type": "enumeration",
+      "enum": ["core", "plus", "ultimate"]
+    },
+    "status": {
+      "type": "string"
+    },
+    "amount": {
+      "type": "integer"
+    },
+    "currency": {
+      "type": "string"
+    },
+    "stripeInvoiceId": {
+      "type": "string",
+      "private": true
+    },
+    "occurredAt": {
+      "type": "datetime"
+    }
+  }
+}

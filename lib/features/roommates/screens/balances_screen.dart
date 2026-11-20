@@ -16,12 +16,22 @@ class _BalancesScreenState extends ConsumerState<BalancesScreen> {
   String? _settlingKey;
 
   Future<void> _settle(BalanceDue b) async {
+    final currency = ref.read(preferencesProvider).currency;
+    final confirmed = await AppConfirmDialog.show(
+      context,
+      title: 'Confirmer le remboursement ?',
+      message:
+          '${b.fromPerson} a remboursé ${Formatters.money(b.amount, symbol: currency)} à ${b.toPerson}. '
+          'Cette opération sera visible par toute la colocation.',
+      confirmLabel: 'Confirmer',
+    );
+    if (!confirmed || !mounted) return;
+
     final key = '${b.fromPerson}->${b.toPerson}:${b.amount}';
     setState(() => _settlingKey = key);
     try {
       await ref.read(expensesAsyncProvider.notifier).settle(b);
       if (!mounted) return;
-      final currency = ref.read(preferencesProvider).currency;
       AppSnackbar.success(
         context,
         'Remboursement de ${Formatters.money(b.amount, symbol: currency)} enregistré !',
@@ -41,6 +51,8 @@ class _BalancesScreenState extends ConsumerState<BalancesScreen> {
   Widget build(BuildContext context) {
     final balances = ref.watch(balancesDueProvider);
     final currency = ref.watch(preferencesProvider).currency;
+    final me = ref.watch(currentRoommateProvider);
+    final membersById = ref.watch(roommatesByIdProvider);
 
     return AppScaffold(
       title: 'Équilibre des soldes',
@@ -144,13 +156,25 @@ class _BalancesScreenState extends ConsumerState<BalancesScreen> {
                             ),
                           ),
                           AppSpacing.gapXs,
-                          AppButton(
-                            label: 'Régler',
-                            size: AppButtonSize.sm,
-                            variant: AppButtonVariant.tonal,
-                            isLoading: _settlingKey == '${b.fromPerson}->${b.toPerson}:${b.amount}',
-                            onPressed: () => _settle(b),
-                          ),
+                          // Seule la personne qui rembourse enregistre le remboursement
+                          // (ou la personne remboursée si le débiteur n'a pas de compte).
+                          if (b.canBeSettledBy(me, membersById))
+                            AppButton(
+                              label: 'Régler',
+                              size: AppButtonSize.sm,
+                              variant: AppButtonVariant.tonal,
+                              isLoading:
+                                  _settlingKey == '${b.fromPerson}->${b.toPerson}:${b.amount}',
+                              onPressed: _settlingKey != null ? null : () => _settle(b),
+                            )
+                          else
+                            Text(
+                              'En attente de ${b.fromPerson.split(' ').first}',
+                              style: context.text.labelSmall?.copyWith(
+                                color: context.colors.textSecondary,
+                              ),
+                              textAlign: TextAlign.end,
+                            ),
                         ],
                       ),
                     ),

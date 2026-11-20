@@ -11,7 +11,7 @@ Studora is a mobile app that helps students organise and follow their studies, f
 | **Grades** | Record grades by subject, set academic goals and simulate results |
 | **Study** | Plan study sessions and tasks, use a Pomodoro timer and review their history |
 | **Groups** | Create or join study groups with an invitation code, and chat with members |
-| **Colocation** | Create or join a shared home with an invitation key, then manage roommates, chores, shared expenses and balances, and chat together |
+| **Colocation** | Create or join a shared home with an invitation key, then manage roommates, recurring chores, shared expenses and balances, and chat together with message notifications |
 
 ## Tech stack
 
@@ -94,6 +94,20 @@ flutter test
 ```bash
 cd backend
 npm test
+```
+
+### Colocation module
+
+The Colocation module (Ultimate plan) covers shared chores, expenses, balances and a group chat,
+with phone notifications for new messages. Each roommate can only act on what concerns them,
+and the server enforces it. See [docs/colocation.md](docs/colocation.md) for the rules, the
+files involved and a step-by-step demo guide.
+
+To fill a local Strapi with demo accounts and data (never against the shared database):
+
+```bash
+cd backend
+node scripts/seed-colocation-demo.js
 ```
 
 ### Adding dependencies
