@@ -93,3 +93,59 @@ class AcademicGoal {
     if (subjectId != null) 'subjectId': subjectId,
   };
 }
+
+/// Note détectée par l'IA dans un relevé, à faire valider par l'étudiant
+/// avant d'être enregistrée (`POST /api/grades/import-scan`).
+@immutable
+class ScannedGrade {
+  const ScannedGrade({
+    required this.subjectName,
+    required this.title,
+    required this.value,
+    required this.originalValue,
+    required this.originalScale,
+    required this.coefficient,
+    this.subjectId,
+    this.date,
+    this.uncertain = false,
+  });
+
+  factory ScannedGrade.fromJson(Map<String, dynamic> json) {
+    double number(Object? raw, double fallback) =>
+        raw is num ? raw.toDouble() : double.tryParse('$raw') ?? fallback;
+    final rawSubjectId = json['subjectId'];
+
+    return ScannedGrade(
+      subjectId: (rawSubjectId == null || rawSubjectId.toString().isEmpty)
+          ? null
+          : rawSubjectId.toString(),
+      subjectName: (json['subjectName'] ?? '').toString(),
+      title: (json['title'] ?? '').toString(),
+      value: number(json['value'], 0),
+      originalValue: number(json['originalValue'], 0),
+      originalScale: number(json['originalScale'], 20),
+      coefficient: number(json['coefficient'], 1),
+      date: DateTime.tryParse((json['date'] ?? '').toString()),
+      uncertain: json['uncertain'] == true,
+    );
+  }
+
+  /// Matière de l'étudiant reconnue par l'IA (null = aucune correspondance).
+  final String? subjectId;
+
+  /// Nom de la matière tel qu'il figure dans le document.
+  final String subjectName;
+  final String title;
+
+  /// Note ramenée sur 20.
+  final double value;
+
+  /// Note et barème tels qu'écrits dans le document (ex. 7 sur 10).
+  final double originalValue;
+  final double originalScale;
+  final double coefficient;
+  final DateTime? date;
+
+  /// L'IA a eu un doute de lecture sur cette ligne.
+  final bool uncertain;
+}

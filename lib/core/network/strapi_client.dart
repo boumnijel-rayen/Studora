@@ -1,30 +1,16 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:io';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'api_config.dart';
 import 'api_exception.dart';
+import 'http_transport.dart';
+import 'http_transport_io.dart'
+    if (dart.library.js_interop) 'http_transport_web.dart' as platform;
 import 'token_storage.dart';
 
-/// Signature d'un transport HTTP injectable (facilite les tests unitaires/widgets).
-typedef HttpTransport = Future<HttpTransportResponse> Function(
-  String method,
-  Uri uri, {
-  required Map<String, String> headers,
-  String? body,
-});
-
-class HttpTransportResponse {
-  const HttpTransportResponse({
-    required this.statusCode,
-    required this.body,
-  });
-
-  final int statusCode;
-  final String body;
-}
+export 'http_transport.dart';
 
 /// Client HTTP centralisé pour communiquer avec le backend Strapi.
 ///
@@ -41,7 +27,7 @@ class StrapiClient {
     this.onUnauthorized,
   })  : _tokenStorage = tokenStorage,
         _baseUrl = baseUrl ?? ApiConfig.apiBaseUrl,
-        _transport = transport ?? _defaultTransport;
+        _transport = transport ?? platform.defaultHttpTransport;
 
   final TokenStorage _tokenStorage;
   final String _baseUrl;
@@ -98,11 +84,13 @@ class StrapiClient {
     Map<String, dynamic>? body,
     bool wrapData = true,
     bool authenticated = true,
+    Duration? timeout,
   }) => _send(
     'POST',
     path,
     body: body == null ? null : (wrapData ? {'data': body} : body),
     authenticated: authenticated,
+    timeout: timeout,
   );
 
   Future<dynamic> put(
@@ -160,6 +148,7 @@ class StrapiClient {
     Map<String, dynamic>? queryParameters,
     Map<String, dynamic>? body,
     required bool authenticated,
+    Duration? timeout,
   }) async {
     final uri = _buildUri(path, queryParameters);
     final headers = _headers(authenticated: authenticated);
@@ -172,21 +161,11 @@ class StrapiClient {
         uri,
         headers: headers,
         body: encodedBody,
-      ).timeout(ApiConfig.timeout);
+      ).timeout(timeout ?? ApiConfig.timeout);
     } on TimeoutException {
       throw const ApiException(
         kind: ApiErrorKind.network,
         message: 'Le serveur Strapi ne répond pas (délai d\'attente dépassé).',
-      );
-    } on SocketException {
-      throw const ApiException(
-        kind: ApiErrorKind.network,
-        message: 'Impossible de se connecter au serveur Strapi. Vérifiez que le backend est démarré et votre connexion réseau.',
-      );
-    } on HttpException {
-      throw const ApiException(
-        kind: ApiErrorKind.network,
-        message: 'Erreur de communication HTTP avec le serveur Strapi.',
       );
     } on ApiException {
       rethrow;
@@ -372,32 +351,6 @@ class StrapiClient {
       }
     }
     return const [];
-  }
-
-  static Future<HttpTransportResponse> _defaultTransport(
-    String method,
-    Uri uri, {
-    required Map<String, String> headers,
-    String? body,
-  }) async {
-    final client = HttpClient()..connectionTimeout = ApiConfig.timeout;
-    try {
-      final request = await client.openUrl(method, uri);
-      headers.forEach(request.headers.set);
-      if (body != null) {
-        final bytes = utf8.encode(body);
-        request.contentLength = bytes.length;
-        request.add(bytes);
-      }
-      final response = await request.close();
-      final responseBody = await utf8.decodeStream(response);
-      return HttpTransportResponse(
-        statusCode: response.statusCode,
-        body: responseBody,
-      );
-    } finally {
-      client.close(force: false);
-    }
   }
 }
 

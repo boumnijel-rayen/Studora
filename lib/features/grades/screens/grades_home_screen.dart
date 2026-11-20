@@ -134,6 +134,14 @@ class GradesHomeScreen extends ConsumerWidget {
                   ),
                 ],
               ),
+              AppSpacing.gapSm,
+              AppButton(
+                label: 'Importer un relevé (IA)',
+                icon: Icons.document_scanner_rounded,
+                variant: AppButtonVariant.tonal,
+                expand: true,
+                onPressed: () => context.push(GradesRoutes.importGrades),
+              ),
               AppSpacing.gapLg,
 
               // Liste des matières

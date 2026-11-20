@@ -9,6 +9,7 @@ import 'screens/academic_goals_screen.dart';
 import 'screens/add_edit_grade_screen.dart';
 import 'screens/grade_simulator_screen.dart';
 import 'screens/grades_home_screen.dart';
+import 'screens/import_grades_screen.dart';
 import 'screens/subject_grades_detail_screen.dart';
 
 /// Module 5 — Notes & objectifs académiques (Membre 5).
@@ -40,6 +41,11 @@ class GradesModule extends FeatureModule {
           path: 'new',
           parentNavigatorKey: AppNavigator.rootKey,
           builder: (_, _) => const AddEditGradeScreen(),
+        ),
+        GoRoute(
+          path: 'import',
+          parentNavigatorKey: AppNavigator.rootKey,
+          builder: (_, _) => const ImportGradesScreen(),
         ),
         GoRoute(
           path: 'goals',
