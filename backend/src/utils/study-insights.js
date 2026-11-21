@@ -319,33 +319,68 @@ async function loadUserData(strapi, userId, now) {
 // ── Appel Gemini ────────────────────────────────────────────────────────────
 
 const DEFAULT_MODEL = 'gemini-3.5-flash-lite';
+const DEFAULT_FALLBACK_MODEL = 'gemini-3.5-flash';
 const RESPONSE_JSON_SCHEMA = z.toJSONSchema(InsightsSchema);
+
+// Erreurs passagères côté Google (modèle surchargé, panne brève) : on retente
+// une fois avec le modèle de secours au lieu d'échouer tout de suite.
+const TRANSIENT_STATUSES = new Set([500, 502, 503, 504]);
+
+// Budget total sous le délai de 60 s côté Flutter : le modèle principal a
+// 20 s max, le modèle de secours reçoit le temps restant.
+const TOTAL_BUDGET_MS = 55_000;
+const PRIMARY_TIMEOUT_MS = 20_000;
+const MIN_FALLBACK_MS = 5_000;
 
 let cachedClient = null;
 function getClient() {
   if (!cachedClient) {
-    // Délai < 60 s côté Flutter, et une seule tentative pour rester sous ce délai.
     cachedClient = new GoogleGenAI({
       apiKey: process.env.GEMINI_API_KEY,
-      httpOptions: { timeout: 50_000, retryOptions: { attempts: 1 } },
+      httpOptions: { retryOptions: { attempts: 1 } },
     });
   }
   return cachedClient;
 }
 
+function generate(model, payload, timeout) {
+  return getClient().models.generateContent({
+    model,
+    contents: JSON.stringify(payload),
+    config: {
+      httpOptions: { timeout },
+      systemInstruction: SYSTEM_PROMPT,
+      responseMimeType: 'application/json',
+      responseJsonSchema: RESPONSE_JSON_SCHEMA,
+      maxOutputTokens: 4000,
+    },
+  });
+}
+
+function isTransient(error) {
+  if (error instanceof ApiError) return TRANSIENT_STATUSES.has(error.status);
+  // Délai dépassé (AbortError) : le modèle est probablement saturé.
+  return error?.name === 'AbortError' || /aborted/i.test(String(error?.message));
+}
+
+async function generateWithFallback(strapi, payload) {
+  const primary = process.env.AI_MODEL || DEFAULT_MODEL;
+  const fallback = process.env.AI_FALLBACK_MODEL || DEFAULT_FALLBACK_MODEL;
+  const start = Date.now();
+  try {
+    return await generate(primary, payload, PRIMARY_TIMEOUT_MS);
+  } catch (error) {
+    const remaining = TOTAL_BUDGET_MS - (Date.now() - start);
+    if (!isTransient(error) || remaining < MIN_FALLBACK_MS) throw error;
+    strapi.log.warn(`[study-insights] ${primary} indisponible (${error.status ?? 'délai dépassé'}), nouvel essai avec ${fallback}.`);
+    return generate(fallback, payload, remaining);
+  }
+}
+
 async function askModel(strapi, payload) {
   let response;
   try {
-    response = await getClient().models.generateContent({
-      model: process.env.AI_MODEL || DEFAULT_MODEL,
-      contents: JSON.stringify(payload),
-      config: {
-        systemInstruction: SYSTEM_PROMPT,
-        responseMimeType: 'application/json',
-        responseJsonSchema: RESPONSE_JSON_SCHEMA,
-        maxOutputTokens: 4000,
-      },
-    });
+    response = await generateWithFallback(strapi, payload);
   } catch (error) {
     if (error instanceof ApiError) {
       if (error.status === 429) {
@@ -357,9 +392,15 @@ async function askModel(strapi, payload) {
         throw new AiUnavailableError();
       }
       strapi.log.error(`[study-insights] Erreur API Gemini (${error.status}) : ${error.message}`);
+      if (TRANSIENT_STATUSES.has(error.status)) {
+        throw new AiUnavailableError("L'IA de Google est très demandée en ce moment. Réessaie dans quelques instants.");
+      }
       throw new AiUnavailableError();
     }
     strapi.log.error(`[study-insights] Appel Gemini impossible : ${error.message}`);
+    if (isTransient(error)) {
+      throw new AiUnavailableError("L'IA de Google est très demandée en ce moment. Réessaie dans quelques instants.");
+    }
     throw new AiUnavailableError();
   }
 
